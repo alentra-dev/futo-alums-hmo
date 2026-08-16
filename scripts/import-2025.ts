@@ -115,11 +115,9 @@ if (!shouldApply) {
   console.log('Dry run complete. Private preview written to .private/2025-import-preview.json.');
   process.exit(0);
 }
-if (!shouldInvite) throw new Error('Live import requires --invite so every household can be linked to a verified account.');
-
 const url = process.env.SUPABASE_URL;
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-if (!url || !serviceKey) throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required for --apply.');
+const serviceKey = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (!url || !serviceKey) throw new Error('SUPABASE_URL and SUPABASE_SECRET_KEY are required for --apply.');
 const supabase = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
 
 async function one<T>(promise: PromiseLike<{ data: T | null; error: { message: string } | null }>) {
@@ -148,24 +146,43 @@ for (const [code, rates] of observed) {
 }
 const historicalPlans = await one(supabase.from('plan_offerings').select('id,code').eq('period_id', period2025.id));
 
-async function invite(email: string, displayName: string) {
-  const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, { data: { display_name: displayName } });
-  if (error && !error.message.toLowerCase().includes('already')) throw new Error(error.message);
-  if (data.user) return data.user.id;
+async function ensureUser(email: string, displayName: string) {
   const users = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  if (users.error) throw new Error(users.error.message);
   const existing = users.data.users.find((user) => user.email?.toLowerCase() === email);
-  if (!existing) throw new Error(`Unable to locate invited user for ${email}`);
-  return existing.id;
+  if (existing) return existing.id;
+
+  if (shouldInvite) {
+    const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, {
+      data: { display_name: displayName },
+      redirectTo: 'https://alentra-dev.github.io/futo-alums-hmo/',
+    });
+    if (error) throw new Error(error.message);
+    if (!data.user) throw new Error(`Unable to create invited user for ${email}`);
+    return data.user.id;
+  }
+
+  const { data, error } = await supabase.auth.admin.createUser({
+    email,
+    email_confirm: true,
+    user_metadata: { display_name: displayName },
+  });
+  if (error) throw new Error(error.message);
+  return data.user.id;
 }
 
 for (const [index, household] of households.entries()) {
-  const userId = await invite(household.accountEmail, `${household.principal.firstName} ${household.principal.surname}`);
+  const userId = await ensureUser(household.accountEmail, `${household.principal.firstName} ${household.principal.surname}`);
   await supabase.from('program_memberships').upsert({ program_id: program.id, user_id: userId, role: 'subscriber', active: true });
   const savedHousehold = await one(supabase.from('households').upsert({ program_id: program.id, legacy_key: `picture-set-${index + 1}` }, { onConflict: 'program_id,legacy_key' }).select('id').single());
   await supabase.from('account_households').upsert({ user_id: userId, household_id: savedHousehold.id });
   const people = [household.principal, ...household.dependents].map((person) => ({ household_id: savedHousehold.id, member_type: person.memberType, surname: person.surname, first_name: person.firstName, middle_name: person.middleName, date_of_birth: person.dateOfBirth, gender: person.gender, relation: person.relation, nationality: person.nationality, address_of_residence: person.address, country_of_residence: person.country, state_of_residence: person.state, town_of_residence: person.town, lga_of_residence: person.lga, mobile_no: person.mobile, email: person.email }));
-  const { error: peopleError } = await supabase.from('people').upsert(people, { onConflict: 'id' });
-  if (peopleError) throw new Error(peopleError.message);
+  const { count, error: countError } = await supabase.from('people').select('id', { count: 'exact', head: true }).eq('household_id', savedHousehold.id);
+  if (countError) throw new Error(countError.message);
+  if (!count) {
+    const { error: peopleError } = await supabase.from('people').insert(people);
+    if (peopleError) throw new Error(peopleError.message);
+  }
   const plan = historicalPlans.find((item: any) => item.code === household.normalizedPlanCode);
   const nhis = Math.max(0, household.avonWithNhisKobo - household.premiumKobo);
   const reserve = Math.round(household.premiumKobo * 0.02);
@@ -178,11 +195,17 @@ const ownerEmail = process.env.OWNER_EMAIL?.toLowerCase();
 const adminEmails = (process.env.ADMIN_EMAILS ?? '').split(',').map((email) => email.trim().toLowerCase()).filter(Boolean);
 if (!ownerEmail || !adminEmails.length) throw new Error('OWNER_EMAIL and ADMIN_EMAILS are required for live import.');
 for (const email of new Set([ownerEmail, ...adminEmails])) {
-  const userId = await invite(email, email.split('@')[0]);
+  const userId = await ensureUser(email, email.split('@')[0]);
   await supabase.from('program_memberships').upsert({ program_id: program.id, user_id: userId, role: email === ownerEmail ? 'owner' : 'admin', active: true });
 }
 
 const accountNumber = process.env.PAYMENT_ACCOUNT_NUMBER;
 if (!accountNumber) throw new Error('PAYMENT_ACCOUNT_NUMBER is required for live import.');
-await supabase.from('payment_accounts').upsert({ program_id: program.id, beneficiary: process.env.PAYMENT_ACCOUNT_NAME, bank: process.env.PAYMENT_BANK, account_number: accountNumber, reference_prefix: 'FUTO HMO' });
-console.log('Live import complete. Invitations were sent to linked subscriber and administrator accounts.');
+const { data: activeAccount, error: accountLookupError } = await supabase.from('payment_accounts').select('id').eq('program_id', program.id).is('active_until', null).maybeSingle();
+if (accountLookupError) throw new Error(accountLookupError.message);
+const accountRecord = { program_id: program.id, beneficiary: process.env.PAYMENT_ACCOUNT_NAME, bank: process.env.PAYMENT_BANK, account_number: accountNumber, reference_prefix: 'FUTO HMO' };
+const accountWrite = activeAccount
+  ? await supabase.from('payment_accounts').update(accountRecord).eq('id', activeAccount.id)
+  : await supabase.from('payment_accounts').insert(accountRecord);
+if (accountWrite.error) throw new Error(accountWrite.error.message);
+console.log(`Live import complete. ${shouldInvite ? 'Invitations were sent.' : 'Accounts were created without sending email.'}`);

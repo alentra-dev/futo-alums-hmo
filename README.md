@@ -28,17 +28,17 @@ Dry-run validation writes an ignored, owner-readable preview under `.private/`:
 npm run import:2025 -- "/path/to/Enrollee Onboarding Template.xlsx"
 ```
 
-The live import requires the service-role key only in the local process environment. It creates 2025 closed records, rolls demographics into 2026 drafts, links shared account emails, configures administrators and the payment account, and sends account invitations.
+The live import requires a secret key only in the local process environment. It creates 2025 closed records, rolls demographics into 2026 drafts, links shared account emails, and configures administrators and the payment account. Add `--invite` only after configuring production SMTP; without it, accounts are created silently and can use magic-link login once SMTP is ready.
 
 ```bash
 SUPABASE_URL="https://project.supabase.co" \
-SUPABASE_SERVICE_ROLE_KEY="..." \
+SUPABASE_SECRET_KEY="..." \
 OWNER_EMAIL="..." \
 ADMIN_EMAILS="admin1@example.com,admin2@example.com" \
 PAYMENT_ACCOUNT_NAME="..." \
 PAYMENT_BANK="..." \
 PAYMENT_ACCOUNT_NUMBER="..." \
-npm run import:2025 -- "/path/to/workbook.xlsx" --apply --invite
+npm run import:2025 -- "/path/to/workbook.xlsx" --apply
 ```
 
 Real records, exports, receipts, credentials, and account configuration are excluded by `.gitignore` and must never enter Git history.
