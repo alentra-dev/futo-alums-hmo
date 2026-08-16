@@ -1,0 +1,119 @@
+export type Role = 'subscriber' | 'admin' | 'owner';
+export type EnrollmentStatus = 'draft' | 'ready' | 'submitted' | 'closed';
+export type PaymentStatus = 'pending' | 'verified' | 'rejected';
+export type PlanCategory = 'individual' | 'family';
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  displayName: string;
+  role: Role;
+}
+
+export interface Person {
+  id: string;
+  memberType: 'Member' | 'Dependent';
+  surname: string;
+  firstName: string;
+  middleName: string;
+  dateOfBirth: string;
+  gender: 'Male' | 'Female';
+  relation: string;
+  nationality: string;
+  enrollmentDate: string;
+  address: string;
+  country: string;
+  state: string;
+  town: string;
+  lga: string;
+  mobile: string;
+  email: string;
+}
+
+export interface PlanBenefit {
+  label: string;
+  value: string;
+}
+
+export interface PlanOffering {
+  id: string;
+  code: string;
+  name: string;
+  description: string;
+  region: string;
+  individualPremiumKobo: number;
+  familyPremiumKobo: number;
+  highlights: string[];
+  benefits: PlanBenefit[];
+  active: boolean;
+}
+
+export interface Enrollment {
+  id: string;
+  year: number;
+  principal: Person;
+  dependents: Person[];
+  planId: string | null;
+  category: PlanCategory;
+  hospital: string;
+  status: EnrollmentStatus;
+  totalKobo: number;
+  consentedAt: string | null;
+  completeness: number;
+}
+
+export interface Payment {
+  id: string;
+  enrollmentId: string;
+  principalName: string;
+  amountKobo: number;
+  paidAt: string;
+  reference: string;
+  proofName: string;
+  status: PaymentStatus;
+  submittedAt: string;
+}
+
+export interface PaymentAccount {
+  beneficiary: string;
+  bank: string;
+  accountNumber: string;
+  referencePrefix: string;
+}
+
+export interface EnrollmentPeriod {
+  id: string;
+  year: number;
+  startsAt: string;
+  endsAt: string;
+  status: 'scheduled' | 'open' | 'closed';
+  extensionNote?: string;
+}
+
+export interface AuditEvent {
+  id: string;
+  createdAt: string;
+  actorName: string;
+  action: string;
+  entityType: string;
+  summary: string;
+}
+
+export interface ProgramSnapshot {
+  profile: UserProfile;
+  period: EnrollmentPeriod;
+  plans: PlanOffering[];
+  enrollments: Enrollment[];
+  payments: Payment[];
+  paymentAccount: PaymentAccount;
+  auditEvents: AuditEvent[];
+  hospitalSuggestions: string[];
+}
+
+export interface PaymentInput {
+  enrollmentId: string;
+  amountKobo: number;
+  paidAt: string;
+  reference: string;
+  proof?: File;
+}
