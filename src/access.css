@@ -1,0 +1,10 @@
+.access-admin-list { display: flex; flex-direction: column; gap: 9px; }
+.access-admin-list article { min-height: 70px; display: grid; grid-template-columns: 36px minmax(0, 1fr) auto 130px; align-items: center; gap: 12px; padding: 13px 16px; }
+.access-admin-list article > div { display: flex; flex-direction: column; min-width: 0; }
+.access-admin-list article strong { font-size: 13px; }
+.access-admin-list article small { color: var(--muted); font-size: 10px; overflow-wrap: anywhere; }
+.owner-lock { color: var(--muted); font-size: 11px; text-align: center; }
+@media (max-width: 620px) {
+  .access-admin-list article { grid-template-columns: 36px 1fr auto; }
+  .access-admin-list article .button, .owner-lock { grid-column: 2 / -1; width: 100%; }
+}

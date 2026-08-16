@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Activity, Banknote, Bell, ClipboardCheck, FileClock, HeartPulse, LayoutDashboard, LogOut, Menu, Settings, ShieldCheck, Users, X } from 'lucide-react';
+import { Activity, Banknote, ClipboardCheck, FileClock, HeartPulse, LayoutDashboard, LogOut, Menu, Settings, ShieldCheck, Users, X } from 'lucide-react';
 import clsx from 'clsx';
 import { useApp } from '../context/AppContext';
 import { initials } from '../lib/format';
@@ -62,7 +62,6 @@ export function AppShell() {
           {demoMode && <select aria-label="Preview role" value={profile.role} onChange={(event) => setDemoRole(event.target.value as 'subscriber' | 'admin' | 'owner')}>
             <option value="subscriber">Subscriber preview</option><option value="admin">Admin preview</option><option value="owner">Owner preview</option>
           </select>}
-          <IconButton label="Notifications"><Bell size={20} /></IconButton>
         </div>
       </header>
       {demoMode && <div className="demo-banner">Preview environment · Synthetic records only</div>}
