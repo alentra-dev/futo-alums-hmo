@@ -13,11 +13,14 @@ major_version = 17
 
 [auth]
 enabled = true
-site_url = "http://localhost:5173"
-additional_redirect_urls = ["https://alentra-dev.github.io/futo-alums-hmo/"]
+site_url = "https://alentra-dev.github.io/futo-alums-hmo/"
+additional_redirect_urls = ["http://localhost:5173"]
 jwt_expiry = 3600
 enable_signup = false
 
 [storage]
 enabled = true
 file_size_limit = "10MiB"
+
+[storage.vector]
+enabled = false

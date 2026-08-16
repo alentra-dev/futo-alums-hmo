@@ -25,4 +25,4 @@ jobs:
       - name: Apply migrations
         run: supabase db push --linked --include-all
       - name: Apply Auth configuration
-        run: supabase config push --project-ref "$SUPABASE_PROJECT_ID"
+        run: supabase config push --project-ref "$SUPABASE_PROJECT_ID" --yes
