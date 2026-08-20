@@ -4,7 +4,7 @@ import { useApp } from '../context/AppContext';
 import { Button } from '../components/ui';
 
 export function LoginPage() {
-  const { signIn, demoMode, notice } = useApp();
+  const { signIn, demoMode, notice, authError } = useApp();
   const [email, setEmail] = useState(demoMode ? 'ada.okafor@example.com' : '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -25,7 +25,7 @@ export function LoginPage() {
         <label htmlFor="email">Email address</label>
         <div className="input-icon"><Mail size={19} /><input id="email" type="email" required autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" /></div>
         <Button type="submit" disabled={busy} icon={<ArrowRight size={18} />}>{busy ? 'Sending link…' : demoMode ? 'Open preview' : 'Send secure sign-in link'}</Button>
-        {(error || notice) && <p className={error ? 'form-error' : 'form-success'}>{error || notice}</p>}
+        {(error || authError || notice) && <p className={(error || authError) ? 'form-error' : 'form-success'}>{error || authError || notice}</p>}
       </form>
       <div className="security-note"><LockKeyhole size={18} /><span>Your account is restricted to records associated with your verified email.</span></div>
       <a href={`${import.meta.env.BASE_URL}privacy`}>Privacy notice</a>

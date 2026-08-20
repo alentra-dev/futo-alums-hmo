@@ -1,6 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { demoSnapshot } from '../data/demo';
+import { authCallbackError, buildFreshAuthUrl, buildMagicLinkRedirect, hasAuthCallback } from '../lib/authCallback';
 import { fullName } from '../lib/format';
 import { planTotalKobo } from '../lib/money';
 import { isDemoMode, supabase } from '../lib/supabase';
@@ -12,6 +13,7 @@ interface AppContextValue {
   authenticated: boolean;
   demoMode: boolean;
   notice: string | null;
+  authError: string | null;
   signIn: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
   setDemoRole: (role: Role) => void;
@@ -31,11 +33,14 @@ function mapSnapshot(payload: unknown): ProgramSnapshot {
 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
+  const initialUrl = useRef(new URL(window.location.href));
+  const authCallbackPending = useRef(!isDemoMode && hasAuthCallback(initialUrl.current));
   const [snapshot, setSnapshot] = useState<ProgramSnapshot | null>(isDemoMode ? demoSnapshot : null);
   const [authenticated, setAuthenticated] = useState(isDemoMode);
   const [loading, setLoading] = useState(!isDemoMode);
   const [notice, setNotice] = useState<string | null>(null);
 
+  const [authError, setAuthError] = useState<string | null>(isDemoMode ? null : authCallbackError(initialUrl.current));
   const loadLiveSnapshot = useCallback(async () => {
     if (!supabase) return;
     setLoading(true);
@@ -58,28 +63,49 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (isDemoMode || !supabase) return;
-    supabase.auth.getSession().then(({ data }) => {
-      const hasSession = Boolean(data.session);
+    let active = true;
+    let loadTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const handleSession = (hasSession: boolean) => {
+      if (!active) return;
       setAuthenticated(hasSession);
-      if (hasSession) void loadLiveSnapshot();
-      else setLoading(false);
+      if (!hasSession) {
+        setSnapshot(null);
+        setLoading(false);
+        return;
+      }
+      if (authCallbackPending.current) {
+        authCallbackPending.current = false;
+        window.location.replace(buildFreshAuthUrl(initialUrl.current));
+        return;
+      }
+      // Supabase advises keeping async work outside the auth-state callback.
+      loadTimer = setTimeout(() => void loadLiveSnapshot(), 0);
+    };
+
+    supabase.auth.getSession().then(({ data }) => {
+      handleSession(Boolean(data.session));
     });
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setAuthenticated(Boolean(session));
-      if (session) void loadLiveSnapshot();
-      else setSnapshot(null);
+      handleSession(Boolean(session));
     });
-    return () => listener.subscription.unsubscribe();
+    return () => {
+      active = false;
+      if (loadTimer) clearTimeout(loadTimer);
+      listener.subscription.unsubscribe();
+    };
   }, [loadLiveSnapshot]);
 
   const signIn = async (email: string) => {
+    setAuthError(null);
+    setNotice(null);
     if (isDemoMode) {
       setAuthenticated(true);
       setSnapshot({ ...demoSnapshot, profile: { ...demoSnapshot.profile, email } });
       return;
     }
     if (!supabase) throw new Error('Authentication is not configured.');
-    const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL}`;
+    const redirectTo = buildMagicLinkRedirect(window.location.origin, import.meta.env.BASE_URL);
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: { shouldCreateUser: false, emailRedirectTo: redirectTo },
@@ -90,6 +116,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     if (!isDemoMode && supabase) await supabase.auth.signOut();
+    setAuthError(null);
+    setNotice(null);
     setAuthenticated(false);
     if (!isDemoMode) setSnapshot(null);
   };
@@ -218,6 +246,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setDemoRole,
     dismissNotice: () => setNotice(null),
     selectPlan,
+    authError,
     updateEnrollment,
     submitPayment,
     reviewPayment,
