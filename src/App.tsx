@@ -24,19 +24,27 @@ function AdminGuard({ children }: { children: ReactNode }) {
   return snapshot?.profile.role === 'admin' || snapshot?.profile.role === 'owner' ? children : <Navigate to="/" replace />;
 }
 
+function SubscriberGuard({ children }: { children: ReactNode }) {
+  const { snapshot } = useApp();
+  const canAdmin = snapshot?.profile.role === 'admin' || snapshot?.profile.role === 'owner';
+  return snapshot?.subscriberEnrollmentIds.length ? children : <Navigate to={canAdmin ? '/admin' : '/login'} replace />;
+}
+
 export default function App() {
   const { loading, authenticated, snapshot } = useApp();
   if (loading) return <LoadingPage />;
+  const canAdmin = snapshot?.profile.role === 'admin' || snapshot?.profile.role === 'owner';
 
   return <Suspense fallback={<LoadingPage />}><Routes>
     <Route path="/login" element={authenticated && snapshot ? <Navigate to="/" replace /> : <LoginPage />} />
     <Route path="/privacy" element={<PrivacyPage />} />
     <Route element={authenticated && snapshot ? <AppShell /> : <Navigate to="/login" replace />}>
-      <Route index element={<DashboardPage />} />
-      <Route path="enrollment" element={<EnrollmentPage />} />
-      <Route path="plans" element={<PlansPage />} />
-      <Route path="payments" element={<PaymentsPage />} />
-      <Route path="history" element={<HistoryPage />} />
+      <Route index element={canAdmin ? <Navigate to="/admin" replace /> : <SubscriberGuard><DashboardPage /></SubscriberGuard>} />
+      <Route path="account" element={<SubscriberGuard><DashboardPage /></SubscriberGuard>} />
+      <Route path="enrollment" element={<SubscriberGuard><EnrollmentPage /></SubscriberGuard>} />
+      <Route path="plans" element={<SubscriberGuard><PlansPage /></SubscriberGuard>} />
+      <Route path="payments" element={<SubscriberGuard><PaymentsPage /></SubscriberGuard>} />
+      <Route path="history" element={<SubscriberGuard><HistoryPage /></SubscriberGuard>} />
       <Route path="admin" element={<AdminGuard><AdminDashboardPage /></AdminGuard>} />
       <Route path="admin/enrollees" element={<AdminGuard><AdminEnrolleesPage /></AdminGuard>} />
       <Route path="admin/payments" element={<AdminGuard><AdminPaymentsPage /></AdminGuard>} />

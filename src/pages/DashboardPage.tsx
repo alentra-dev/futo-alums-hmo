@@ -2,13 +2,14 @@ import { Link } from 'react-router-dom';
 import { ArrowRight, Banknote, CalendarDays, CheckCircle2, ClipboardCheck, Copy, HeartPulse, Users } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { formatDate, fullName } from '../lib/format';
+import { subscriberEnrollment } from '../lib/enrollmentAccess';
 import { formatNaira } from '../lib/money';
 import { Button, PageHeader, ProgressBar, StatusBadge } from '../components/ui';
 
 export function DashboardPage() {
   const { snapshot } = useApp();
-  const { enrollments, payments, paymentAccount, period } = snapshot!;
-  const enrollment = enrollments[0];
+  const { payments, paymentAccount, period } = snapshot!;
+  const enrollment = subscriberEnrollment(snapshot!);
   const relevantPayments = payments.filter((item) => item.enrollmentId === enrollment.id);
   const verified = relevantPayments.filter((item) => item.status === 'verified').reduce((sum, item) => sum + item.amountKobo, 0);
   const pending = relevantPayments.filter((item) => item.status === 'pending').reduce((sum, item) => sum + item.amountKobo, 0);

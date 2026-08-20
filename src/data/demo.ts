@@ -137,6 +137,7 @@ export const demoSnapshot: ProgramSnapshot = {
     displayName: 'Ada Okafor',
     role: 'owner',
   },
+  subscriberEnrollmentIds: ['enrollment-ada'],
   period: {
     id: 'period-2026',
     year: 2026,

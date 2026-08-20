@@ -29,10 +29,14 @@ export function AppShell() {
   const navigate = useNavigate();
   const profile = snapshot!.profile;
   const canAdmin = profile.role === 'admin' || profile.role === 'owner';
-  const nav = useMemo(() => canAdmin && location.pathname.startsWith('/admin') ? adminNav : subscriberNav, [canAdmin, location.pathname]);
+  const hasSubscriberWorkspace = snapshot!.subscriberEnrollmentIds.length > 0;
+  const nav = useMemo(() => {
+    if (canAdmin && location.pathname.startsWith('/admin')) return adminNav;
+    return subscriberNav.map((item, index) => index === 0 && canAdmin ? { ...item, to: '/account' } : item);
+  }, [canAdmin, location.pathname]);
 
   const swapWorkspace = () => {
-    const next = location.pathname.startsWith('/admin') ? '/' : '/admin';
+    const next = location.pathname.startsWith('/admin') ? '/account' : '/admin';
     navigate(next);
     setMenuOpen(false);
   };
@@ -46,7 +50,7 @@ export function AppShell() {
         {nav.map(({ to, label, icon: Icon }) => <NavLink key={to} to={to} end={to === '/' || to === '/admin'} onClick={() => setMenuOpen(false)}><Icon size={19} />{label}</NavLink>)}
       </nav>
       <div className="sidebar__footer">
-        {canAdmin && <button className="workspace-switch" onClick={swapWorkspace}><ShieldCheck size={18} /><span>{location.pathname.startsWith('/admin') ? 'Subscriber view' : 'Admin workspace'}</span></button>}
+        {canAdmin && hasSubscriberWorkspace && <button className="workspace-switch" onClick={swapWorkspace}><ShieldCheck size={18} /><span>{location.pathname.startsWith('/admin') ? 'Subscriber view' : 'Admin workspace'}</span></button>}
         <div className="profile-mini"><span className="avatar">{initials(profile.displayName)}</span><span><strong>{profile.displayName}</strong><small>{profile.role}</small></span></div>
         <button className="signout" onClick={() => void signOut()}><LogOut size={17} />Sign out</button>
       </div>

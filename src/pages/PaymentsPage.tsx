@@ -2,12 +2,13 @@ import { useMemo, useState, type FormEvent } from 'react';
 import { Banknote, CheckCircle2, Copy, FileUp, Info, ReceiptText } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { formatDate, formatDateTime } from '../lib/format';
+import { subscriberEnrollment } from '../lib/enrollmentAccess';
 import { formatNaira, nairaToKobo } from '../lib/money';
 import { Button, EmptyState, Modal, PageHeader, ProgressBar, StatusBadge } from '../components/ui';
 
 export function PaymentsPage() {
   const { snapshot, submitPayment } = useApp();
-  const enrollment = snapshot!.enrollments[0];
+  const enrollment = subscriberEnrollment(snapshot!);
   const account = snapshot!.paymentAccount;
   const payments = useMemo(() => snapshot!.payments.filter((item) => item.enrollmentId === enrollment.id), [snapshot, enrollment.id]);
   const verified = payments.filter((item) => item.status === 'verified').reduce((sum, item) => sum + item.amountKobo, 0);

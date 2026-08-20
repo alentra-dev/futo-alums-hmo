@@ -2,6 +2,7 @@ import { useMemo, useState, type FormEvent } from 'react';
 import { Check, ChevronDown, ChevronUp, Hospital, Plus, ShieldCheck, UserRound } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { fullName } from '../lib/format';
+import { subscriberEnrollment } from '../lib/enrollmentAccess';
 import { Button, PageHeader, ProgressBar, StatusBadge } from '../components/ui';
 import type { Person } from '../lib/types';
 
@@ -27,7 +28,7 @@ function PersonFields({ person, onChange }: { person: Person; onChange: (person:
 
 export function EnrollmentPage() {
   const { snapshot, updateEnrollment } = useApp();
-  const original = snapshot!.enrollments[0];
+  const original = subscriberEnrollment(snapshot!);
   const [draft, setDraft] = useState(original);
   const [expanded, setExpanded] = useState<string>(original.principal.id);
   const [consent, setConsent] = useState(Boolean(original.consentedAt));

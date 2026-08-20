@@ -39,12 +39,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const loadLiveSnapshot = useCallback(async () => {
     if (!supabase) return;
     setLoading(true);
-    const { data, error } = await supabase.rpc('get_portal_snapshot');
+    const [snapshotResult, enrollmentIdsResult] = await Promise.all([
+      supabase.rpc('get_portal_snapshot'),
+      supabase.rpc('get_subscriber_enrollment_ids'),
+    ]);
+    const error = snapshotResult.error ?? enrollmentIdsResult.error;
     if (error) {
       setNotice(error.message);
       setSnapshot(null);
     } else {
-      setSnapshot(mapSnapshot(data));
+      setSnapshot({
+        ...mapSnapshot(snapshotResult.data),
+        subscriberEnrollmentIds: (enrollmentIdsResult.data ?? []) as string[],
+      });
     }
     setLoading(false);
   }, []);

@@ -3,12 +3,13 @@ import { Check, ChevronRight, Globe2, Info, Users } from 'lucide-react';
 import clsx from 'clsx';
 import { useApp } from '../context/AppContext';
 import { formatNaira, planTotalKobo } from '../lib/money';
+import { subscriberEnrollment } from '../lib/enrollmentAccess';
 import type { PlanCategory, PlanOffering } from '../lib/types';
 import { Button, Modal, PageHeader } from '../components/ui';
 
 export function PlansPage() {
   const { snapshot, selectPlan } = useApp();
-  const enrollment = snapshot!.enrollments[0];
+  const enrollment = subscriberEnrollment(snapshot!);
   const [category, setCategory] = useState<PlanCategory>(enrollment.category);
   const [selected, setSelected] = useState<PlanOffering | null>(null);
   const [busy, setBusy] = useState('');

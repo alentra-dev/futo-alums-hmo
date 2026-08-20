@@ -101,6 +101,7 @@ export interface AuditEvent {
 
 export interface ProgramSnapshot {
   profile: UserProfile;
+  subscriberEnrollmentIds: string[];
   period: EnrollmentPeriod;
   plans: PlanOffering[];
   enrollments: Enrollment[];
