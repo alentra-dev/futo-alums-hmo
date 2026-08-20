@@ -249,7 +249,7 @@ textarea { resize: vertical; }
 .input-icon { position: relative; }
 .input-icon svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #728078; z-index: 1; }
 .input-icon input { padding-left: 40px; }
-.admin-table .data-table__head, .admin-table .data-table__row { grid-template-columns: 1.25fr .8fr .5fr .8fr 1.1fr .6fr; }
+.admin-table .data-table__head, .admin-table .data-table__row { grid-template-columns: 1.25fr .75fr .55fr .45fr .75fr 1fr .6fr; }
 .payment-review-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }
 .payment-review-card { padding: 18px; }
 .payment-review-card__head { display: flex; align-items: center; gap: 10px; }
