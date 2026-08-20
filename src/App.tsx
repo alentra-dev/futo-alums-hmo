@@ -10,10 +10,12 @@ import { PaymentsPage } from './pages/PaymentsPage';
 
 import { PrivacyPage } from './pages/PrivacyPage';
 import { HistoryPage } from './pages/HistoryPage';
+import { JoinPage } from './pages/JoinPage';
 import { lazy, Suspense, type ReactNode } from 'react';
 
 const AdminDashboardPage = lazy(() => import('./pages/admin/AdminDashboardPage').then((module) => ({ default: module.AdminDashboardPage })));
 const AdminEnrolleesPage = lazy(() => import('./pages/admin/AdminEnrolleesPage').then((module) => ({ default: module.AdminEnrolleesPage })));
+const AdminApplicationsPage = lazy(() => import('./pages/admin/AdminApplicationsPage').then((module) => ({ default: module.AdminApplicationsPage })));
 const AdminPaymentsPage = lazy(() => import('./pages/admin/AdminPaymentsPage').then((module) => ({ default: module.AdminPaymentsPage })));
 const AdminSettingsPage = lazy(() => import('./pages/admin/AdminSettingsPage').then((module) => ({ default: module.AdminSettingsPage })));
 const AuditPage = lazy(() => import('./pages/admin/AuditPage').then((module) => ({ default: module.AuditPage })));
@@ -37,8 +39,9 @@ export default function App() {
 
   return <Suspense fallback={<LoadingPage />}><Routes>
     <Route path="/login" element={authenticated && snapshot ? <Navigate to="/" replace /> : <LoginPage />} />
+    <Route path="/join" element={<JoinPage />} />
     <Route path="/privacy" element={<PrivacyPage />} />
-    <Route element={authenticated && snapshot ? <AppShell /> : <Navigate to="/login" replace />}>
+    <Route element={authenticated && snapshot ? <AppShell /> : <Navigate to={authenticated ? '/join' : '/login'} replace />}>
       <Route index element={canAdmin ? <Navigate to="/admin" replace /> : <SubscriberGuard><DashboardPage /></SubscriberGuard>} />
       <Route path="account" element={<SubscriberGuard><DashboardPage /></SubscriberGuard>} />
       <Route path="enrollment" element={<SubscriberGuard><EnrollmentPage /></SubscriberGuard>} />
@@ -46,12 +49,13 @@ export default function App() {
       <Route path="payments" element={<SubscriberGuard><PaymentsPage /></SubscriberGuard>} />
       <Route path="history" element={<SubscriberGuard><HistoryPage /></SubscriberGuard>} />
       <Route path="admin" element={<AdminGuard><AdminDashboardPage /></AdminGuard>} />
+      <Route path="admin/applications" element={<AdminGuard><AdminApplicationsPage /></AdminGuard>} />
       <Route path="admin/enrollees" element={<AdminGuard><AdminEnrolleesPage /></AdminGuard>} />
       <Route path="admin/payments" element={<AdminGuard><AdminPaymentsPage /></AdminGuard>} />
       <Route path="admin/settings" element={<AdminGuard><AdminSettingsPage /></AdminGuard>} />
       <Route path="admin/access" element={<AdminGuard><AdminAccessPage /></AdminGuard>} />
       <Route path="admin/audit" element={<AdminGuard><AuditPage /></AdminGuard>} />
     </Route>
-    <Route path="*" element={<Navigate to={authenticated ? '/' : '/login'} replace />} />
+    <Route path="*" element={<Navigate to={authenticated ? (snapshot ? '/' : '/join') : '/login'} replace />} />
   </Routes></Suspense>;
 }

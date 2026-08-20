@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
-import { ArrowRight, LockKeyhole, Mail } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { ArrowRight, LockKeyhole, Mail, UserPlus } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Button } from '../components/ui';
 
@@ -25,6 +26,7 @@ export function LoginPage() {
         <label htmlFor="email">Email address</label>
         <div className="input-icon"><Mail size={19} /><input id="email" type="email" required autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" /></div>
         <Button type="submit" disabled={busy} icon={<ArrowRight size={18} />}>{busy ? 'Sending link…' : demoMode ? 'Open preview' : 'Send secure sign-in link'}</Button>
+      <Link className="join-link" to="/join"><UserPlus size={17} />New subscriber enrollment</Link>
         {(error || authError || notice) && <p className={(error || authError) ? 'form-error' : 'form-success'}>{error || authError || notice}</p>}
       </form>
       <div className="security-note"><LockKeyhole size={18} /><span>Your account is restricted to records associated with your verified email.</span></div>

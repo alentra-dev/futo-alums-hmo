@@ -120,3 +120,55 @@ export interface PaymentInput {
 }
 
 export type EnrollmentPeriodSnapshot = Pick<ProgramSnapshot, 'period' | 'plans' | 'enrollments' | 'payments'>;
+export type SubscriberApplicationStatus = 'draft' | 'pending_review' | 'request_changes' | 'approved' | 'rejected';
+export type DuplicateReviewStatus = 'unchecked' | 'clear' | 'review_required' | 'resolved' | 'confirmed_duplicate';
+
+export interface SubscriberApplication {
+  id: string;
+  periodId: string;
+  year: number;
+  status: SubscriberApplicationStatus;
+  graduationYear: number;
+  principal: Person;
+  dependents: Person[];
+  planId: string | null;
+  category: PlanCategory;
+  hospital: string;
+  consentedAt: string | null;
+  duplicateStatus: DuplicateReviewStatus;
+  adminNote: string | null;
+  enrollmentId: string | null;
+  submittedAt: string | null;
+  createdAt: string;
+}
+
+export interface JoinConfig {
+  acceptingApplications: boolean;
+  period: EnrollmentPeriod | null;
+  plans: PlanOffering[];
+}
+
+export interface JoinWorkspace {
+  email: string;
+  accountHasMembership: boolean;
+  applications: SubscriberApplication[];
+}
+
+export interface DuplicateCandidate {
+  id: string;
+  confidence: 'likely' | 'possible';
+  signals: string[];
+  status: 'open' | 'distinct' | 'duplicate';
+  personId: string;
+  name: string;
+  dateOfBirth: string;
+  mobile: string;
+  email: string;
+  managedBy: string;
+}
+
+export interface AdminSubscriberApplication extends SubscriberApplication {
+  planName: string;
+  accountEmail: string;
+  candidates: DuplicateCandidate[];
+}

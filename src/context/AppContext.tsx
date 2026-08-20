@@ -15,6 +15,7 @@ interface AppContextValue {
   notice: string | null;
   authError: string | null;
   signIn: (email: string) => Promise<void>;
+  register: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
   setDemoRole: (role: Role) => void;
   dismissNotice: () => void;
@@ -50,9 +51,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     ]);
     const error = snapshotResult.error ?? enrollmentIdsResult.error;
     if (error) {
-      setNotice(error.message);
+      if (error.message !== 'No active program membership') setNotice(error.message);
       setSnapshot(null);
     } else {
+      setNotice(null);
       setSnapshot({
         ...mapSnapshot(snapshotResult.data),
         subscriberEnrollmentIds: (enrollmentIdsResult.data ?? []) as string[],
@@ -112,6 +114,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
     if (error) throw error;
     setNotice('Check your email for a secure sign-in link.');
+  };
+  const register = async (email: string) => {
+    setAuthError(null);
+    setNotice(null);
+    if (isDemoMode) {
+      setAuthenticated(true);
+      return;
+    }
+    if (!supabase) throw new Error('Authentication is not configured.');
+    const redirectTo = buildMagicLinkRedirect(
+      window.location.origin,
+      `${import.meta.env.BASE_URL}join`,
+    );
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { shouldCreateUser: true, emailRedirectTo: redirectTo },
+    });
+    if (error) throw error;
+    setNotice('Check your email for a secure link to continue your application.');
   };
 
   const signOut = async () => {
@@ -244,6 +265,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     signIn,
     signOut,
     setDemoRole,
+    register,
     dismissNotice: () => setNotice(null),
     selectPlan,
     authError,
