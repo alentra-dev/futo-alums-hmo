@@ -118,3 +118,5 @@ export interface PaymentInput {
   reference: string;
   proof?: File;
 }
+
+export type EnrollmentPeriodSnapshot = Pick<ProgramSnapshot, 'period' | 'plans' | 'enrollments' | 'payments'>;
