@@ -5,6 +5,7 @@ import { AppProvider } from './context/AppContext';
 import App from './App';
 import './styles.css';
 import './join.css';
+import './home.css';
 import { getPagesRedirect } from './lib/pagesRedirect';
 
 const storedRedirect = sessionStorage.getItem('redirect');

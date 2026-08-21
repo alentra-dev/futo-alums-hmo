@@ -9,6 +9,7 @@ import { EnrollmentPage } from './pages/EnrollmentPage';
 import { PaymentsPage } from './pages/PaymentsPage';
 
 import { PrivacyPage } from './pages/PrivacyPage';
+import { HomePage } from './pages/HomePage';
 import { HistoryPage } from './pages/HistoryPage';
 import { JoinPage } from './pages/JoinPage';
 import { lazy, Suspense, type ReactNode } from 'react';
@@ -38,11 +39,11 @@ export default function App() {
   const canAdmin = snapshot?.profile.role === 'admin' || snapshot?.profile.role === 'owner';
 
   return <Suspense fallback={<LoadingPage />}><Routes>
+    <Route path="/" element={authenticated ? <Navigate to={snapshot ? (canAdmin ? '/admin' : '/account') : '/join'} replace /> : <HomePage />} />
     <Route path="/login" element={authenticated && snapshot ? <Navigate to="/" replace /> : <LoginPage />} />
     <Route path="/join" element={<JoinPage />} />
     <Route path="/privacy" element={<PrivacyPage />} />
     <Route element={authenticated && snapshot ? <AppShell /> : <Navigate to={authenticated ? '/join' : '/login'} replace />}>
-      <Route index element={canAdmin ? <Navigate to="/admin" replace /> : <SubscriberGuard><DashboardPage /></SubscriberGuard>} />
       <Route path="account" element={<SubscriberGuard><DashboardPage /></SubscriberGuard>} />
       <Route path="enrollment" element={<SubscriberGuard><EnrollmentPage /></SubscriberGuard>} />
       <Route path="plans" element={<SubscriberGuard><PlansPage /></SubscriberGuard>} />
@@ -56,6 +57,6 @@ export default function App() {
       <Route path="admin/access" element={<AdminGuard><AdminAccessPage /></AdminGuard>} />
       <Route path="admin/audit" element={<AdminGuard><AuditPage /></AdminGuard>} />
     </Route>
-    <Route path="*" element={<Navigate to={authenticated ? (snapshot ? '/' : '/join') : '/login'} replace />} />
+    <Route path="*" element={<Navigate to={authenticated ? (snapshot ? '/' : '/join') : '/'} replace />} />
   </Routes></Suspense>;
 }
