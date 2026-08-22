@@ -10,6 +10,8 @@ import type { Enrollment, EnrollmentPeriod, Payment, PaymentAccount, PaymentInpu
 interface AppContextValue {
   snapshot: ProgramSnapshot | null;
   loading: boolean;
+  activeEnrollmentId: string;
+  setActiveEnrollmentId: (enrollmentId: string) => void;
   authenticated: boolean;
   demoMode: boolean;
   notice: string | null;
@@ -25,6 +27,7 @@ interface AppContextValue {
   reviewPayment: (paymentId: string, status: Exclude<PaymentStatus, 'pending'>) => Promise<void>;
   updatePeriod: (changes: Partial<EnrollmentPeriod>) => Promise<void>;
   updatePaymentAccount: (account: PaymentAccount) => Promise<void>;
+  updateProgramTimezone: (timezone: string) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -37,6 +40,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const initialUrl = useRef(new URL(window.location.href));
   const authCallbackPending = useRef(!isDemoMode && hasAuthCallback(initialUrl.current));
   const [snapshot, setSnapshot] = useState<ProgramSnapshot | null>(isDemoMode ? demoSnapshot : null);
+  const [activeEnrollmentId, setActiveEnrollmentIdState] = useState(() => localStorage.getItem('futo-hmo-active-enrollment') ?? '');
   const [authenticated, setAuthenticated] = useState(isDemoMode);
   const [loading, setLoading] = useState(!isDemoMode);
   const [notice, setNotice] = useState<string | null>(null);
@@ -62,6 +66,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     setLoading(false);
   }, []);
+
+  useEffect(() => {
+    const ids = snapshot?.subscriberEnrollmentIds ?? [];
+    if (!ids.length || ids.includes(activeEnrollmentId)) return;
+    localStorage.setItem('futo-hmo-active-enrollment', ids[0]);
+    setActiveEnrollmentIdState(ids[0]);
+  }, [snapshot, activeEnrollmentId]);
+
+  const setActiveEnrollmentId = (enrollmentId: string) => {
+    localStorage.setItem('futo-hmo-active-enrollment', enrollmentId);
+    setActiveEnrollmentIdState(enrollmentId);
+  };
 
   useEffect(() => {
     if (isDemoMode || !supabase) return;
@@ -256,8 +272,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setNotice('Payment account updated.');
   };
 
+  const updateProgramTimezone = async (timezone: string) => {
+    if (!isDemoMode && supabase) {
+      const { error } = await supabase.rpc('update_program_settings', { p_changes: { timezone } });
+      if (error) throw error;
+      await loadLiveSnapshot();
+      return;
+    }
+    mutateDemo((current) => ({ ...current, program: { ...current.program, timezone } }));
+    setNotice('Program time zone updated.');
+  };
+
   const value: AppContextValue = {
     snapshot,
+    activeEnrollmentId,
+    setActiveEnrollmentId,
     loading,
     authenticated,
     demoMode: isDemoMode,
@@ -274,6 +303,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     reviewPayment,
     updatePeriod,
     updatePaymentAccount,
+    updateProgramTimezone,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

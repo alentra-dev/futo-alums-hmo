@@ -131,6 +131,7 @@ const principal = {
 const familyTotal = planTotalKobo(planOfferings[1].familyPremiumKobo);
 
 export const demoSnapshot: ProgramSnapshot = {
+  program: { name: 'FUTO Alums HMO Program', timezone: 'Africa/Lagos' },
   profile: {
     id: 'demo-user',
     email: 'ada.okafor@example.com',
@@ -195,9 +196,9 @@ export const demoSnapshot: ProgramSnapshot = {
     referencePrefix: 'FUTO HMO',
   },
   auditEvents: [
-    { id: 'audit-1', createdAt: '2026-08-08T09:12:00+01:00', actorName: 'Ada Okafor', action: 'payment.submitted', entityType: 'Payment', summary: 'Submitted a payment notification for review' },
-    { id: 'audit-2', createdAt: '2026-07-02T16:04:00+01:00', actorName: 'Program administrator', action: 'payment.verified', entityType: 'Payment', summary: 'Verified a subscriber payment' },
-    { id: 'audit-3', createdAt: '2026-06-05T11:20:00+01:00', actorName: 'Ada Okafor', action: 'enrollment.submitted', entityType: 'Enrollment', summary: 'Submitted 2026 family enrollment' },
+    { id: 'audit-1', createdAt: '2026-08-08T09:12:00+01:00', actorName: 'Ada Okafor', actorEmail: 'ada.okafor@example.com', action: 'payment.submitted', entityType: 'Payment', summary: 'Submitted a payment notification for Ada Okafor' },
+    { id: 'audit-2', createdAt: '2026-07-02T16:04:00+01:00', actorName: 'Program administrator', actorEmail: 'admin@example.com', action: 'payment.verified', entityType: 'Payment', summary: 'Verified a subscriber payment for Ada Okafor' },
+    { id: 'audit-3', createdAt: '2026-06-05T11:20:00+01:00', actorName: 'Ada Okafor', actorEmail: 'ada.okafor@example.com', action: 'enrollment.submitted', entityType: 'Enrollment', summary: 'Submitted 2026 family enrollment for Ada Okafor' },
   ],
   hospitalSuggestions: [
     'Federal Medical Centre Owerri',

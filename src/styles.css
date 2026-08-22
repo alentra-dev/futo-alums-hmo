@@ -195,6 +195,8 @@ textarea { resize: vertical; }
 .accordion__trigger > svg:nth-last-child(2) { color: #4a9b6c; }
 .accordion__trigger > svg:last-child { color: #78847d; }
 .accordion__content { padding: 18px; border-top: 1px solid var(--line); background: #fbfcfb; }
+.accordion__content fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.accordion__content > .button--danger { margin-top: 16px; }
 .selection-summary { display: flex; align-items: center; justify-content: space-between; gap: 14px; background: #f4f8f5; border: 1px solid #dce7e1; padding: 13px 15px; border-radius: 6px; margin-bottom: 16px; }
 .selection-summary > div { display: flex; flex-direction: column; }
 .selection-summary small, .selection-summary span { color: #718078; font-size: 10px; text-transform: capitalize; }
@@ -378,7 +380,7 @@ textarea { resize: vertical; }
 
 @media (max-width: 620px) {
   h1 { font-size: 24px; }
-  .topbar__actions select { display: none; }
+  .topbar__actions select { max-width: 145px; }
   .demo-banner { padding-left: 10px; padding-right: 10px; }
   .page-header { align-items: flex-start; flex-direction: column; gap: 14px; }
   .page-header__actions, .page-header__actions > .button, .page-header__actions > .segmented, .button-row { width: 100%; }

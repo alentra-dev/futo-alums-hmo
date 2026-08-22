@@ -36,6 +36,7 @@ function planAmount(plan: JoinConfig['plans'][number], category: PlanCategory) {
 export function JoinPage() {
   const { authenticated, snapshot, register, signOut, notice, authError } = useApp();
   const [config, setConfig] = useState<JoinConfig | null>(isDemoMode ? {
+    timezone: 'Africa/Lagos',
     acceptingApplications: true,
     period: snapshot?.period ?? null,
     plans: snapshot?.plans ?? [],

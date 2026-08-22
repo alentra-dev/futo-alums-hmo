@@ -13,6 +13,11 @@ describe('subscriber enrollment isolation', () => {
     expect(subscriberEnrollment(snapshot).id).toBe('mine');
   });
 
+  it('selects the requested principal when one account manages multiple households', () => {
+    const multiple = { ...snapshot, subscriberEnrollmentIds: ['mine', 'second'], enrollments: [...snapshot.enrollments, { id: 'second' }] } as ProgramSnapshot;
+    expect(subscriberEnrollment(multiple, 'second').id).toBe('second');
+  });
+
   it('rejects a subscriber workspace with no linked household', () => {
     expect(() => subscriberEnrollment({ ...snapshot, subscriberEnrollmentIds: [] })).toThrow(
       'No household is linked to this account.',

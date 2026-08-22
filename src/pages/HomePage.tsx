@@ -6,10 +6,11 @@ import { useApp } from '../context/AppContext';
 import { formatNaira, planTotalKobo } from '../lib/money';
 import { isDemoMode, supabase } from '../lib/supabase';
 import type { JoinConfig } from '../lib/types';
+import { formatDate as formatProgramDate } from '../lib/format';
 
-function formatDate(value?: string) {
+function formatDate(value?: string, timezone = 'Africa/Lagos') {
   if (!value) return 'Dates to be announced';
-  return new Intl.DateTimeFormat('en-NG', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(value));
+  return formatProgramDate(value, timezone);
 }
 
 export function HomePage() {
@@ -56,7 +57,7 @@ export function HomePage() {
         <p>Private, coordinated access to annual AVON health coverage for alumni and their households.</p>
         <div className="home-hero__actions"><Link className="home-action home-action--primary" to="/join"><Users size={18} />Enroll as a new subscriber</Link><a className="home-action home-action--secondary" href="#member-sign-in"><LockKeyhole size={18} />Member sign in</a></div>
       </div>
-      <div className="home-hero__status"><span className={config?.acceptingApplications ? 'open' : ''}></span><strong>{config?.acceptingApplications ? 'Enrollment open' : 'Enrollment information'}</strong><small>{config?.period ? `Closes ${formatDate(config.period.endsAt)}` : 'Current dates are loading'}</small></div>
+      <div className="home-hero__status"><span className={config?.acceptingApplications ? 'open' : ''}></span><strong>{config?.acceptingApplications ? 'Enrollment open' : 'Enrollment information'}</strong><small>{config?.period ? `Closes ${formatDate(config.period.endsAt, config.timezone)}` : 'Current dates are loading'}</small></div>
     </section>
 
     <section className="home-access" id="member-sign-in">
@@ -74,8 +75,8 @@ export function HomePage() {
     </section>
 
     <section className="home-enrollment">
-      <div><p className="eyebrow">Current enrollment</p><h2>{config?.period ? `${config.period.year} applications` : 'Annual applications'}</h2><p>{config?.acceptingApplications ? `Applications are open through ${formatDate(config.period?.endsAt)}. Administrators may extend or close the period when needed.` : 'Enrollment dates and offerings are managed annually by the program administrators.'}</p></div>
-      <dl><div><dt><CalendarDays size={18} />Enrollment window</dt><dd>{config?.period ? `${formatDate(config.period.startsAt)} – ${formatDate(config.period.endsAt)}` : 'June through August'}</dd></div><div><dt><CircleDollarSign size={18} />Subscriber totals</dt><dd>{startingTotal ? `Individual cover from ${startingTotal}` : 'All totals include the disclosed 3% program fee'}</dd></div></dl>
+      <div><p className="eyebrow">Current enrollment</p><h2>{config?.period ? `${config.period.year} applications` : 'Annual applications'}</h2><p>{config?.acceptingApplications ? `Applications are open through ${formatDate(config.period?.endsAt, config.timezone)}. Administrators may extend or close the period when needed.` : 'Enrollment dates and offerings are managed annually by the program administrators.'}</p></div>
+      <dl><div><dt><CalendarDays size={18} />Enrollment window</dt><dd>{config?.period ? `${formatDate(config.period.startsAt, config.timezone)} – ${formatDate(config.period.endsAt, config.timezone)}` : 'June through August'}</dd></div><div><dt><CircleDollarSign size={18} />Subscriber totals</dt><dd>{startingTotal ? `Individual cover from ${startingTotal}` : 'All totals include the disclosed 3% program fee'}</dd></div></dl>
       <Link className="home-action home-action--primary" to="/join">View plans and enroll<ArrowRight size={18} /></Link>
     </section>
 

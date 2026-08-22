@@ -7,7 +7,7 @@ import { initials } from '../lib/format';
 import { IconButton } from './ui';
 
 const subscriberNav = [
-  { to: '/', label: 'Overview', icon: LayoutDashboard },
+  { to: '/account', label: 'Overview', icon: LayoutDashboard },
   { to: '/enrollment', label: 'Enrollment', icon: ClipboardCheck },
   { to: '/plans', label: 'Plans', icon: HeartPulse },
   { to: '/payments', label: 'Payments', icon: Banknote },
@@ -24,16 +24,17 @@ const adminNav = [
 ];
 
 export function AppShell() {
-  const { snapshot, signOut, demoMode, setDemoRole, notice, dismissNotice } = useApp();
+  const { snapshot, activeEnrollmentId, setActiveEnrollmentId, signOut, demoMode, setDemoRole, notice, dismissNotice } = useApp();
   const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const profile = snapshot!.profile;
   const canAdmin = profile.role === 'admin' || profile.role === 'owner';
   const hasSubscriberWorkspace = snapshot!.subscriberEnrollmentIds.length > 0;
+  const subscriberWorkspaces = snapshot!.enrollments.filter((item) => snapshot!.subscriberEnrollmentIds.includes(item.id));
   const nav = useMemo(() => {
     if (canAdmin && location.pathname.startsWith('/admin')) return adminNav;
-    return subscriberNav.map((item, index) => index === 0 && canAdmin ? { ...item, to: '/account' } : item);
+    return subscriberNav;
   }, [canAdmin, location.pathname]);
 
   const swapWorkspace = () => {
@@ -64,6 +65,9 @@ export function AppShell() {
         <IconButton label="Open navigation" className="menu-button" onClick={() => setMenuOpen(true)}><Menu size={22} /></IconButton>
         <div className="topbar__period"><span className="live-dot" />{snapshot!.period.year} enrollment <strong>{snapshot!.period.status}</strong></div>
         <div className="topbar__actions">
+          {subscriberWorkspaces.length > 1 && !location.pathname.startsWith('/admin') && <select aria-label="Managed principal" value={activeEnrollmentId || subscriberWorkspaces[0].id} onChange={(event) => setActiveEnrollmentId(event.target.value)}>
+            {subscriberWorkspaces.map((item) => <option key={item.id} value={item.id}>{item.principal.firstName} {item.principal.surname}</option>)}
+          </select>}
           {demoMode && <select aria-label="Preview role" value={profile.role} onChange={(event) => setDemoRole(event.target.value as 'subscriber' | 'admin' | 'owner')}>
             <option value="subscriber">Subscriber preview</option><option value="admin">Admin preview</option><option value="owner">Owner preview</option>
           </select>}

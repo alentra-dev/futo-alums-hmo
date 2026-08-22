@@ -30,4 +30,16 @@ describe('enrollment export columns', () => {
     expect(await headers('avon')).toEqual(avonExportColumns);
     expect(await headers('admin')).toEqual(adminFullExportColumns);
   });
+
+  it('keeps draft records internal and out of the AVON submission', async () => {
+    const ExcelJS = await import('exceljs');
+    const draftSnapshot = { ...demoSnapshot, enrollments: demoSnapshot.enrollments.map((item) => ({ ...item, status: 'draft' as const })) };
+    const rows = async (kind: 'avon' | 'admin') => {
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(await createEnrollmentWorkbook(draftSnapshot, kind));
+      return workbook.worksheets[0].rowCount;
+    };
+    expect(await rows('avon')).toBe(1);
+    expect(await rows('admin')).toBeGreaterThan(1);
+  });
 });

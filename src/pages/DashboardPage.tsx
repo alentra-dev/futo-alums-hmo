@@ -7,9 +7,9 @@ import { formatNaira } from '../lib/money';
 import { Button, PageHeader, ProgressBar, StatusBadge } from '../components/ui';
 
 export function DashboardPage() {
-  const { snapshot } = useApp();
+  const { snapshot, activeEnrollmentId } = useApp();
   const { payments, paymentAccount, period } = snapshot!;
-  const enrollment = subscriberEnrollment(snapshot!);
+  const enrollment = subscriberEnrollment(snapshot!, activeEnrollmentId);
   const relevantPayments = payments.filter((item) => item.enrollmentId === enrollment.id);
   const verified = relevantPayments.filter((item) => item.status === 'verified').reduce((sum, item) => sum + item.amountKobo, 0);
   const pending = relevantPayments.filter((item) => item.status === 'pending').reduce((sum, item) => sum + item.amountKobo, 0);
@@ -19,7 +19,7 @@ export function DashboardPage() {
   const copyAccount = () => void navigator.clipboard.writeText(paymentAccount.accountNumber);
 
   return <>
-    <PageHeader eyebrow={`${period.year} enrollment`} title={`Welcome, ${enrollment.principal.firstName}`} description={`Enrollment closes ${formatDate(period.endsAt)}.`} actions={<Button icon={<Banknote size={18} />} onClick={() => location.assign(`${import.meta.env.BASE_URL}payments`)}>Notify payment</Button>} />
+    <PageHeader eyebrow={`${period.year} enrollment`} title={`Welcome, ${enrollment.principal.firstName}`} description={`Enrollment closes ${formatDate(period.endsAt, snapshot!.program.timezone)}.`} actions={<Button icon={<Banknote size={18} />} onClick={() => location.assign(`${import.meta.env.BASE_URL}payments`)}>Notify payment</Button>} />
 
     <section className="metric-grid">
       <article className="metric metric--accent"><span className="metric__icon"><HeartPulse size={21} /></span><div><small>Selected plan</small><strong>{snapshot!.plans.find((plan) => plan.id === enrollment.planId)?.name ?? 'Not selected'}</strong><span>{enrollment.category === 'family' ? `${enrollment.dependents.length + 1} covered people` : 'Individual cover'}</span></div></article>

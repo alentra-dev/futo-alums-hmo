@@ -36,6 +36,7 @@ export async function createEnrollmentWorkbook(snapshot: ProgramSnapshot, kind: 
   sheet.addRow(columns);
   let serial = 1;
   for (const enrollment of snapshot.enrollments) {
+    if (!adminFull && !['submitted', 'closed'].includes(enrollment.status)) continue;
     const plan = snapshot.plans.find((item) => item.id === enrollment.planId);
     if (!plan) continue;
     const premiumKobo = enrollment.category === 'family' ? plan.familyPremiumKobo : plan.individualPremiumKobo;

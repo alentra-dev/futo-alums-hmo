@@ -94,12 +94,19 @@ export interface AuditEvent {
   id: string;
   createdAt: string;
   actorName: string;
+  actorEmail: string;
   action: string;
   entityType: string;
   summary: string;
 }
 
+export interface ProgramInfo {
+  name: string;
+  timezone: string;
+}
+
 export interface ProgramSnapshot {
+  program: ProgramInfo;
   profile: UserProfile;
   subscriberEnrollmentIds: string[];
   period: EnrollmentPeriod;
@@ -143,6 +150,7 @@ export interface SubscriberApplication {
 }
 
 export interface JoinConfig {
+  timezone: string;
   acceptingApplications: boolean;
   period: EnrollmentPeriod | null;
   plans: PlanOffering[];
