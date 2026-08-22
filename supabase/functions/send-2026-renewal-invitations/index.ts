@@ -82,7 +82,13 @@ Deno.serve(async (request) => {
 
   const uniqueEmails = new Set(recipients.map((item) => item.email));
   if (uniqueEmails.size !== recipients.length) invalid += recipients.length - uniqueEmails.size;
-  const validation = { accounts: recipients.length, households: householdIds.length, invalid, duplicates: recipients.length - uniqueEmails.size, resendConfigured: Boolean(resendKey) };
+  const { data: previousFailures } = await supabase.from('email_campaign_deliveries').select('error_message').eq('campaign_key', CAMPAIGN_KEY).eq('status', 'failed');
+  const failureCategories = Object.entries((previousFailures ?? []).reduce<Record<string, number>>((counts, item) => {
+    const category = item.error_message || 'Unspecified delivery failure';
+    counts[category] = (counts[category] ?? 0) + 1;
+    return counts;
+  }, {})).map(([category, count]) => ({ category, count }));
+  const validation = { accounts: recipients.length, households: householdIds.length, invalid, duplicates: recipients.length - uniqueEmails.size, resendConfigured: Boolean(resendKey), failureCategories };
   if (mode === 'dry_run') return json(validation, invalid === 0 ? 200 : 409);
   if (invalid > 0 || !resendKey) return json({ ...validation, error: 'Validation failed; no messages were sent' }, 409);
 
