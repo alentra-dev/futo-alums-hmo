@@ -43,8 +43,17 @@ jobs:
           echo "::add-mask::$KEY"
           echo "key=$KEY" >> "$GITHUB_OUTPUT"
           supabase secrets set invitation_batch_key="$KEY" --project-ref "$SUPABASE_PROJECT_ID"
-      - name: Confirm configured secret names
-        run: supabase secrets list --project-ref "$SUPABASE_PROJECT_ID"
+      - name: Bridge existing Resend SMTP credential
+        run: |
+          AUTH_CONFIG="$(curl --fail-with-body --silent --show-error \
+            "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_ID/config/auth" \
+            -H "authorization: Bearer $SUPABASE_ACCESS_TOKEN")"
+          SMTP_HOST="$(jq -r '.smtp_host // empty' <<< "$AUTH_CONFIG")"
+          SMTP_PASS="$(jq -r '.smtp_pass // empty' <<< "$AUTH_CONFIG")"
+          test "$SMTP_HOST" = "smtp.resend.com"
+          test -n "$SMTP_PASS"
+          echo "::add-mask::$SMTP_PASS"
+          supabase secrets set resend_api_key="$SMTP_PASS" --project-ref "$SUPABASE_PROJECT_ID"
       - name: Deploy guarded campaign function
         run: supabase functions deploy send-2026-renewal-invitations --project-ref "$SUPABASE_PROJECT_ID" --no-verify-jwt
       - name: Validate or send
