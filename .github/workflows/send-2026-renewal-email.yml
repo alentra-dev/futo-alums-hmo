@@ -40,8 +40,11 @@ jobs:
         id: key
         run: |
           KEY="$(openssl rand -hex 32)"
+          echo "::add-mask::$KEY"
           echo "key=$KEY" >> "$GITHUB_OUTPUT"
           supabase secrets set invitation_batch_key="$KEY" --project-ref "$SUPABASE_PROJECT_ID"
+      - name: Confirm configured secret names
+        run: supabase secrets list --project-ref "$SUPABASE_PROJECT_ID"
       - name: Deploy guarded campaign function
         run: supabase functions deploy send-2026-renewal-invitations --project-ref "$SUPABASE_PROJECT_ID" --no-verify-jwt
       - name: Validate or send
