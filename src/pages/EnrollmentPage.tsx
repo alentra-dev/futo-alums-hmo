@@ -84,7 +84,7 @@ export function EnrollmentPage() {
       <form className="enrollment-form" onSubmit={save}>
         <section className="panel progress-panel"><div className="panel__heading"><div><p className="eyebrow">Enrollment readiness</p><h2>{draft.completeness === 100 ? 'Ready for submission' : 'Details need attention'}</h2></div><strong>{draft.completeness}%</strong></div><ProgressBar value={draft.completeness} /></section>
 
-        <section className="form-section"><div className="section-heading"><span><UserRound size={20} /></span><div><h2>Covered people</h2><p>Principal and dependent details carried forward from 2025.</p></div></div>
+        <section className="form-section"><div className="section-heading"><span><UserRound size={20} /></span><div><h2>Covered people</h2><p>Review the principal and any dependents included this year.</p></div></div>
           <div className="accordion-list">
             {people.map((person, index) => <article className="accordion" key={person.id}>
               <button type="button" className="accordion__trigger" onClick={() => setExpanded(expanded === person.id ? '' : person.id)}><span className="person-dot">{person.firstName[0]}</span><span><strong>{fullName(person)}</strong><small>{index === 0 ? 'Principal member' : person.relation.toLowerCase()}</small></span><Check size={17} />{expanded === person.id ? <ChevronUp size={19} /> : <ChevronDown size={19} />}</button>
