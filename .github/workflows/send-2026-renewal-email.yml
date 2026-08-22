@@ -28,7 +28,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 2.115.0
       - name: Confirm production send
         if: inputs.mode == 'send' && inputs.confirmation != 'SEND-2026-RENEWALS'
         run: exit 1
