@@ -1,72 +1,95 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
+const PORTAL_URL = 'https://alentra-dev.github.io/futo-alums-hmo/';
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const ALLOWED_ORIGINS = new Set([new URL(PORTAL_URL).origin, 'http://localhost:5173']);
 
-function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+function responseHeaders(request: Request) {
+  const origin = request.headers.get('origin') ?? '';
+  return {
+    'content-type': 'application/json',
+    'access-control-allow-origin': ALLOWED_ORIGINS.has(origin) ? origin : new URL(PORTAL_URL).origin,
+    'access-control-allow-headers': 'authorization, x-client-info, apikey, content-type',
+    'access-control-allow-methods': 'POST, OPTIONS',
+    vary: 'Origin',
+  };
+}
+
+function json(request: Request, body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), { status, headers: responseHeaders(request) });
 }
 
 Deno.serve(async (request) => {
-  if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
-  if (request.headers.get('x-operation-key') !== Deno.env.get('account_email_change_key')) return json({ error: 'Unauthorized' }, 401);
+  if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: responseHeaders(request) });
+  if (request.method !== 'POST') return json(request, { error: 'Method not allowed' }, 405);
 
-  const body = await request.json().catch(() => ({}));
-  const mode = body.mode === 'apply' ? 'apply' : 'dry_run';
-  const oldEmail = String(body.oldEmail ?? '').trim().toLowerCase();
-  const newEmail = String(body.newEmail ?? '').trim().toLowerCase();
-  const actorEmail = String(body.actorEmail ?? '').trim().toLowerCase();
-  if (!EMAIL_PATTERN.test(oldEmail) || !EMAIL_PATTERN.test(newEmail) || !EMAIL_PATTERN.test(actorEmail) || oldEmail === newEmail) {
-    return json({ error: 'Two different account emails and a valid administrator email are required' }, 400);
-  }
-
-  const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
+  const authorization = request.headers.get('authorization');
+  if (!authorization) return json(request, { error: 'Authentication required' }, 401);
+  const url = Deno.env.get('SUPABASE_URL')!;
+  const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+  const callerClient = createClient(url, anonKey, {
+    global: { headers: { Authorization: authorization } },
     auth: { persistSession: false },
   });
-  const { data: oldProfile, error: oldProfileError } = await supabase.from('profiles').select('id,email').ilike('email', oldEmail).maybeSingle();
-  if (oldProfileError || !oldProfile) return json({ error: 'The existing subscriber account was not found' }, 404);
-  const { data: duplicateProfile, error: duplicateError } = await supabase.from('profiles').select('id').ilike('email', newEmail).maybeSingle();
-  if (duplicateError) return json({ error: 'Unable to validate the replacement email' }, 500);
-  if (duplicateProfile && duplicateProfile.id !== oldProfile.id) return json({ error: 'The replacement email already belongs to another account' }, 409);
+  const { data: caller, error: callerError } = await callerClient.auth.getUser();
+  if (callerError || !caller.user) return json(request, { error: 'Authentication required' }, 401);
 
-  const { data: authResult, error: authError } = await supabase.auth.admin.getUserById(oldProfile.id);
-  if (authError || authResult.user?.email?.trim().toLowerCase() !== oldEmail) {
-    return json({ error: 'The Auth identity does not match the existing profile' }, 409);
+  const body = await request.json().catch(() => ({}));
+  const userId = String(body.userId ?? '').trim();
+  const currentEmail = String(body.currentEmail ?? '').trim().toLowerCase();
+  const newEmail = String(body.newEmail ?? '').trim().toLowerCase();
+  const sendLoginLink = body.sendLoginLink !== false;
+  if (!UUID_PATTERN.test(userId) || !EMAIL_PATTERN.test(currentEmail) || !EMAIL_PATTERN.test(newEmail) || currentEmail === newEmail) {
+    return json(request, { error: 'Select an account and enter a different valid email address' }, 400);
   }
-  const { data: householdLinks, error: linksError } = await supabase.from('account_households').select('household_id').eq('user_id', oldProfile.id);
-  if (linksError || !householdLinks?.length) return json({ error: 'The account is not linked to a subscriber household' }, 409);
 
-  const householdIds = householdLinks.map((item) => item.household_id);
-  const { data: households, error: householdsError } = await supabase.from('households').select('program_id').in('id', householdIds);
-  if (householdsError || !households?.length || new Set(households.map((item) => item.program_id)).size !== 1) {
-    return json({ error: 'Unable to validate the subscriber program' }, 409);
+  const service = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } });
+  const { data: actorMembership, error: actorError } = await service.from('program_memberships').select('program_id,role').eq('user_id', caller.user.id).eq('active', true).in('role', ['admin', 'owner']).limit(1).maybeSingle();
+  if (actorError || !actorMembership) return json(request, { error: 'Administrator access required' }, 403);
+
+  const { data: targetProfile, error: targetError } = await service.from('profiles').select('id,email,display_name').eq('id', userId).maybeSingle();
+  if (targetError || !targetProfile || targetProfile.email.trim().toLowerCase() !== currentEmail) {
+    return json(request, { error: 'The subscriber account changed. Refresh the list and try again.' }, 409);
   }
-  const programId = households[0].program_id;
-  const { data: actor, error: actorError } = await supabase.from('profiles').select('id,email').ilike('email', actorEmail).maybeSingle();
-  if (actorError || !actor) return json({ error: 'The administrator account was not found' }, 404);
-  const { data: membership, error: membershipError } = await supabase.from('program_memberships').select('role').eq('program_id', programId).eq('user_id', actor.id).eq('active', true).in('role', ['admin', 'owner']).maybeSingle();
-  if (membershipError || !membership) return json({ error: 'The actor is not an active program administrator' }, 403);
+  const { data: targetMembership, error: targetMembershipError } = await service.from('program_memberships').select('role').eq('program_id', actorMembership.program_id).eq('user_id', userId).eq('active', true).maybeSingle();
+  if (targetMembershipError || targetMembership?.role !== 'subscriber') {
+    return json(request, { error: 'Only subscriber-role account emails can be changed here' }, 403);
+  }
+  const { count: householdCount, error: householdError } = await service.from('account_households').select('household_id,households!inner(program_id)', { count: 'exact', head: true }).eq('user_id', userId).eq('households.program_id', actorMembership.program_id);
+  if (householdError || !householdCount) return json(request, { error: 'The account is not linked to a subscriber household' }, 409);
 
-  const result = { userId: oldProfile.id, householdCount: householdIds.length, actor: actor.email, historicalEnrollmentDataChanged: false };
-  if (mode === 'dry_run') return json({ ...result, ready: true });
+  const { data: duplicate, error: duplicateError } = await service.from('profiles').select('id').ilike('email', newEmail).maybeSingle();
+  if (duplicateError) return json(request, { error: 'Unable to validate the replacement email' }, 500);
+  if (duplicate && duplicate.id !== userId) return json(request, { error: 'That email already belongs to another portal account' }, 409);
+  const { data: authUser, error: authError } = await service.auth.admin.getUserById(userId);
+  if (authError || authUser.user?.email?.trim().toLowerCase() !== currentEmail) {
+    return json(request, { error: 'The Auth identity does not match the subscriber profile' }, 409);
+  }
 
-  const { data: updated, error: updateError } = await supabase.auth.admin.updateUserById(oldProfile.id, {
-    email: newEmail,
-    email_confirm: true,
-  });
+  const { data: updated, error: updateError } = await service.auth.admin.updateUserById(userId, { email: newEmail, email_confirm: true });
   if (updateError || updated.user.email?.trim().toLowerCase() !== newEmail) {
-    return json({ error: 'Supabase Auth could not update the account email' }, 500);
+    return json(request, { error: 'Supabase Auth could not update the account email' }, 500);
   }
-  const { error: auditError } = await supabase.from('audit_events').insert({
-    program_id: programId,
-    actor_user_id: actor.id,
-    action: 'subscriber_access_email.updated',
+  const { error: auditError } = await service.from('audit_events').insert({
+    program_id: actorMembership.program_id,
+    actor_user_id: caller.user.id,
+    action: `subscriber.access_email_updated:${targetProfile.display_name}`,
     entity_type: 'profiles',
-    entity_id: oldProfile.id,
-    old_data: { email: oldEmail },
+    entity_id: userId,
+    old_data: { email: currentEmail },
     new_data: { email: newEmail },
-    request_id: 'guarded-account-email-change',
+    request_id: request.headers.get('x-request-id'),
   });
-  if (auditError) return json({ error: 'Email changed, but the audit event could not be recorded' }, 500);
+  if (auditError) return json(request, { error: 'Email changed, but the audit event could not be recorded', changed: true }, 500);
 
-  return json({ ...result, changed: true });
+  let loginLinkSent = false;
+  let loginLinkWarning: string | null = null;
+  if (sendLoginLink) {
+    const delivery = createClient(url, anonKey, { auth: { persistSession: false } });
+    const { error: linkError } = await delivery.auth.signInWithOtp({ email: newEmail, options: { emailRedirectTo: PORTAL_URL, shouldCreateUser: false } });
+    loginLinkSent = !linkError;
+    if (linkError) loginLinkWarning = 'The email changed, but the sign-in link could not be sent. The subscriber can request one from the portal.';
+  }
+  return json(request, { changed: true, householdCount, historicalEnrollmentDataChanged: false, loginLinkSent, loginLinkWarning });
 });

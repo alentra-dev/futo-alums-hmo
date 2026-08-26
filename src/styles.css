@@ -477,3 +477,19 @@ textarea { resize: vertical; }
   font-weight: 700;
   text-transform: uppercase;
 }
+
+.subscriber-access-list { display: flex; flex-direction: column; gap: 9px; }
+.subscriber-access-list article { min-height: 78px; display: grid; grid-template-columns: 36px minmax(180px, .8fr) minmax(240px, 1.2fr) auto; align-items: center; gap: 14px; padding: 14px 16px; }
+.subscriber-access-list__identity, .subscriber-access-list__principals { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.subscriber-access-list__identity strong, .subscriber-access-list__principals strong { font-size: 12px; overflow-wrap: anywhere; }
+.subscriber-access-list__identity small, .subscriber-access-list__principals small, .subscriber-access-list__principals span { color: var(--muted); font-size: 10px; overflow-wrap: anywhere; }
+.admin-notice { display: flex; align-items: center; gap: 9px; margin: 12px 0; padding: 11px 13px; border-left: 3px solid var(--green-600); background: var(--green-50); color: var(--green-900); font-size: 12px; }
+.account-change-summary { display: flex; flex-direction: column; gap: 4px; padding: 12px; background: var(--surface-2); }
+.account-change-summary small, .account-change-summary span { color: var(--muted); font-size: 10px; }
+.account-change-summary strong { font-size: 13px; overflow-wrap: anywhere; }
+.account-link-option { flex-direction: row !important; align-items: flex-start; }
+.account-change-note { padding: 11px 12px; border-left: 3px solid var(--gold); background: #fff9e9; color: var(--text); font-size: 11px; line-height: 1.5; }
+@media (max-width: 760px) {
+  .subscriber-access-list article { grid-template-columns: 36px minmax(0, 1fr); }
+  .subscriber-access-list__principals, .subscriber-access-list article .button { grid-column: 2; width: 100%; }
+}

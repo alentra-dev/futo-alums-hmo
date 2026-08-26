@@ -26,3 +26,5 @@ jobs:
         run: supabase db push --linked --include-all
       - name: Apply Auth configuration
         run: supabase config push --project-ref "$SUPABASE_PROJECT_ID" --yes
+      - name: Deploy administrative functions
+        run: supabase functions deploy change-subscriber-access-email --project-ref "$SUPABASE_PROJECT_ID"
