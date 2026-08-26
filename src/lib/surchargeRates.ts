@@ -6,7 +6,6 @@ export function surchargeRates(period?: Partial<EnrollmentPeriod> | null): Surch
   return {
     nhisFeeBasisPoints: period?.nhisFeeBasisPoints ?? DEFAULT_SURCHARGE_RATES.nhisFeeBasisPoints,
     programFeeBasisPoints: period?.programFeeBasisPoints ?? DEFAULT_SURCHARGE_RATES.programFeeBasisPoints,
-    transactionTaxBasisPoints: period?.transactionTaxBasisPoints ?? DEFAULT_SURCHARGE_RATES.transactionTaxBasisPoints,
   };
 }
 

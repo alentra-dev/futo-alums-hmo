@@ -146,8 +146,7 @@ export const demoSnapshot: ProgramSnapshot = {
     endsAt: '2026-08-31T23:59:59+01:00',
     status: 'open',
     nhisFeeBasisPoints: 100,
-    programFeeBasisPoints: 200,
-    transactionTaxBasisPoints: 1500,
+    programFeeBasisPoints: 1500,
   },
   plans: planOfferings,
   enrollments: [

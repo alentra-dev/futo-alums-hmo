@@ -9,8 +9,7 @@ const period = (year: number, status: EnrollmentPeriod['status']): EnrollmentPer
   startsAt: `${year}-06-01T00:00:00Z`,
   endsAt: `${year}-08-31T23:59:59Z`,
   nhisFeeBasisPoints: 100,
-  programFeeBasisPoints: 200,
-  transactionTaxBasisPoints: 1500,
+  programFeeBasisPoints: 1500,
 });
 
 describe('admin enrollment period default', () => {

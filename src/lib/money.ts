@@ -1,19 +1,15 @@
 export const KOBO_PER_NAIRA = 100;
-export const TOTAL_FEE_BASIS_POINTS = 300;
 export const NHIS_FEE_BASIS_POINTS = 100;
-export const RESERVE_FEE_BASIS_POINTS = 200;
-export const TRANSACTION_TAX_BASIS_POINTS = 1500;
+export const PROGRAM_FEE_BASIS_POINTS = 1500;
 
 export interface SurchargeRates {
   nhisFeeBasisPoints: number;
   programFeeBasisPoints: number;
-  transactionTaxBasisPoints: number;
 }
 
 export const DEFAULT_SURCHARGE_RATES: SurchargeRates = {
   nhisFeeBasisPoints: NHIS_FEE_BASIS_POINTS,
-  programFeeBasisPoints: RESERVE_FEE_BASIS_POINTS,
-  transactionTaxBasisPoints: TRANSACTION_TAX_BASIS_POINTS,
+  programFeeBasisPoints: PROGRAM_FEE_BASIS_POINTS,
 };
 
 export function calculateFees(premiumKobo: number, rates: SurchargeRates = DEFAULT_SURCHARGE_RATES) {
@@ -21,7 +17,6 @@ export function calculateFees(premiumKobo: number, rates: SurchargeRates = DEFAU
   const reserveFeeKobo = Math.round((premiumKobo * rates.programFeeBasisPoints) / 10_000);
   const programFeeKobo = nhisFeeKobo + reserveFeeKobo;
   const subtotalKobo = premiumKobo + programFeeKobo;
-  const transactionTaxFeeKobo = Math.round((subtotalKobo * rates.transactionTaxBasisPoints) / 10_000);
   return {
     premiumKobo,
     nhisFeeKobo,
@@ -29,8 +24,7 @@ export function calculateFees(premiumKobo: number, rates: SurchargeRates = DEFAU
     totalFeeKobo: programFeeKobo,
     programFeeKobo,
     subtotalKobo,
-    transactionTaxFeeKobo,
-    subscriberTotalKobo: subtotalKobo + transactionTaxFeeKobo,
+    subscriberTotalKobo: subtotalKobo,
   };
 }
 

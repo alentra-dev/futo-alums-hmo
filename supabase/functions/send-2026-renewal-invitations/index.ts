@@ -23,8 +23,8 @@ function ratePercent(basisPoints: number) {
   return (basisPoints / 100).toLocaleString("en-NG", { maximumFractionDigits: 2 });
 }
 
-function message(firstName: string, actionLink: string, principalNames: string[], nhisRate: number, programRate: number, transactionRate: number) {
-  const feeDisclosure = `${ratePercent(nhisRate)}% AVON NHIS fee, ${ratePercent(programRate)}% program fee, and ${ratePercent(transactionRate)}% banking transaction fee applied after the first two fees`;
+function message(firstName: string, actionLink: string, principalNames: string[], nhisRate: number, programRate: number) {
+  const feeDisclosure = `${ratePercent(nhisRate)}% AVON NHIS fee and ${ratePercent(programRate)}% program administrative fee`;
   const managed = principalNames.length > 1
     ? `<p>Your email manages these principal records: <strong>${principalNames.map(escapeHtml).join(', ')}</strong>. Use the principal selector in the portal to complete each enrollment separately.</p>`
     : '';
@@ -46,7 +46,7 @@ Deno.serve(async (request) => {
 
   const { data: program, error: programError } = await supabase.from('programs').select('id').eq('slug', 'futo-alums-hmo').single();
   if (programError) return json({ error: 'Unable to load program' }, 500);
-  const { data: periods, error: periodError } = await supabase.from('enrollment_periods').select('id,coverage_year,nhis_fee_basis_points,program_fee_basis_points,transaction_tax_basis_points').eq('program_id', program.id).in('coverage_year', [2025, 2026]);
+  const { data: periods, error: periodError } = await supabase.from('enrollment_periods').select('id,coverage_year,nhis_fee_basis_points,program_fee_basis_points').eq('program_id', program.id).in('coverage_year', [2025, 2026]);
   if (periodError || periods?.length !== 2) return json({ error: 'Both 2025 and 2026 enrollment periods are required' }, 409);
   const period2025 = periods.find((item) => item.coverage_year === 2025)!;
   const period2026 = periods.find((item) => item.coverage_year === 2026)!;
@@ -110,7 +110,7 @@ Deno.serve(async (request) => {
       continue;
     }
     const firstName = recipient.principalNames.length === 1 ? recipient.principalNames[0].split(' ')[0] : 'FUTO Alum';
-    const content = message(firstName, actionLink, recipient.principalNames, period2026.nhis_fee_basis_points, period2026.program_fee_basis_points, period2026.transaction_tax_basis_points);
+    const content = message(firstName, actionLink, recipient.principalNames, period2026.nhis_fee_basis_points, period2026.program_fee_basis_points);
     const response = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { authorization: `Bearer ${resendKey}`, 'content-type': 'application/json' }, body: JSON.stringify({ from: FROM, to: [recipient.email], subject: 'Complete your 2026 FUTO Alums HMO enrollment', html: content.html, text: content.text }) });
     const result = await response.json().catch(() => ({}));
     if (!response.ok || !result.id) {

@@ -27,7 +27,7 @@ export function DashboardPage() {
 
     <section className="metric-grid">
       <article className="metric metric--accent"><span className="metric__icon"><HeartPulse size={21} /></span><div><small>Selected plan</small><strong>{selectedPlan?.name ?? 'Not selected'}</strong><span>{enrollment.category === 'family' ? `${enrollment.dependents.length + 1} covered people` : 'Individual cover'}</span></div></article>
-      <article className="metric"><span className="metric__icon"><Banknote size={21} /></span><div><small>Total payable</small><strong>{formatNaira(enrollment.totalKobo)}</strong><span>Includes the configured AVON NHIS, program, and transaction fees</span></div></article>
+      <article className="metric"><span className="metric__icon"><Banknote size={21} /></span><div><small>Total payable</small><strong>{formatNaira(enrollment.totalKobo)}</strong><span>Includes the configured AVON NHIS and program administrative fees</span></div></article>
       <article className="metric"><span className="metric__icon"><CheckCircle2 size={21} /></span><div><small>Verified payments</small><strong>{formatNaira(verified)}</strong><span>{pending > 0 ? `${formatNaira(pending)} awaiting review` : 'No pending payments'}</span></div></article>
       <article className="metric"><span className="metric__icon"><CalendarDays size={21} /></span><div><small>Outstanding</small><strong>{formatNaira(outstanding)}</strong><span>{outstanding === 0 ? 'Payment complete' : 'Full payment is strongly encouraged'}</span></div></article>
     </section>

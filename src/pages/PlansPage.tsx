@@ -60,7 +60,7 @@ export function PlansPage() {
         </article>;
       })}
     </div>
-    <div className="disclosure"><Info size={17} /><p>Displayed totals include the configured AVON NHIS ({formatBasisPoints(snapshot!.period.nhisFeeBasisPoints)}%), program ({formatBasisPoints(snapshot!.period.programFeeBasisPoints)}%), and banking transaction ({formatBasisPoints(snapshot!.period.transactionTaxBasisPoints)}%) fees. Benefits and limits apply under AVON’s terms for the {snapshot!.period.year} coverage year.</p></div>
+    <div className="disclosure"><Info size={17} /><p>Displayed totals include the configured AVON NHIS ({formatBasisPoints(snapshot!.period.nhisFeeBasisPoints)}%) and program administrative ({formatBasisPoints(snapshot!.period.programFeeBasisPoints)}%) fees. Benefits and limits apply under AVON’s terms for the {snapshot!.period.year} coverage year.</p></div>
 
     {selected && <Modal title={selected.name} onClose={() => setSelected(null)}>
       <div className="benefit-list">{selected.benefits.map((benefit) => <div key={benefit.label}><span>{benefit.label}</span><strong>{benefit.value}</strong></div>)}</div>

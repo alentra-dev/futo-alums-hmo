@@ -302,7 +302,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         p_period_id: snapshot.period.id,
         p_nhis_basis_points: rates.nhisFeeBasisPoints,
         p_program_basis_points: rates.programFeeBasisPoints,
-        p_transaction_basis_points: rates.transactionTaxBasisPoints,
       });
       if (error) throw error;
       await loadLiveSnapshot();

@@ -90,7 +90,6 @@ export interface EnrollmentPeriod {
   extensionNote?: string;
   nhisFeeBasisPoints: number;
   programFeeBasisPoints: number;
-  transactionTaxBasisPoints: number;
 }
 
 export interface AuditEvent {
