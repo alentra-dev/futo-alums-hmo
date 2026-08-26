@@ -2,11 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { Check, ChevronRight, Globe2, Info, Users } from 'lucide-react';
 import clsx from 'clsx';
 import { useApp } from '../context/AppContext';
-import { formatNaira, planTotalKobo } from '../lib/money';
 import { subscriberEnrollment } from '../lib/enrollmentAccess';
 import { householdValidationMessage, isEnrollmentEditable } from '../lib/subscriberWorkflow';
 import type { PlanCategory, PlanOffering } from '../lib/types';
 import { Button, Modal, PageHeader } from '../components/ui';
+import { FeeBreakdown } from '../components/FeeBreakdown';
 
 export function PlansPage() {
   const { snapshot, activeEnrollmentId, selectPlan } = useApp();
@@ -47,19 +47,18 @@ export function PlansPage() {
     <div className="plan-grid">
       {plans.map((plan) => {
         const premium = category === 'family' ? plan.familyPremiumKobo : plan.individualPremiumKobo;
-        const total = planTotalKobo(premium);
         const current = enrollment.planId === plan.id && enrollment.category === category;
         return <article className={clsx('plan-card', current && 'plan-card--selected')} key={plan.id}>
           <div className="plan-card__top"><span className="plan-code">{plan.code.replaceAll('_', ' ')}</span>{current && <span className="selected-label"><Check size={14} />Current plan</span>}</div>
           <h2>{plan.name}</h2><p>{plan.description}</p>
-          <div className="plan-price"><strong>{formatNaira(total)}</strong><span>annual total · includes 3% fee</span></div>
+          <FeeBreakdown premiumKobo={premium} compact />
           <div className="plan-region"><Globe2 size={16} />{plan.region}</div>
           <ul>{plan.highlights.map((item) => <li key={item}><Check size={16} />{item}</li>)}</ul>
           <div className="plan-card__actions"><Button variant={current ? 'secondary' : 'primary'} disabled={current || busy === plan.id || !editable || Boolean(categoryIssue)} onClick={() => void choose(plan)}>{current ? 'Selected' : busy === plan.id ? 'Saving…' : !editable ? 'Enrollment closed' : 'Select plan'}</Button><button className="text-button" onClick={() => setSelected(plan)}>View benefits <ChevronRight size={16} /></button></div>
         </article>;
       })}
     </div>
-    <div className="disclosure"><Info size={17} /><p>Displayed totals include the program’s 3% fee. Benefits and limits apply under AVON’s terms for the {snapshot!.period.year} coverage year.</p></div>
+    <div className="disclosure"><Info size={17} /><p>Displayed totals include the program’s 3% fee and a separate 15% banking transaction tax calculated on the premium plus program fee. Benefits and limits apply under AVON’s terms for the {snapshot!.period.year} coverage year.</p></div>
 
     {selected && <Modal title={selected.name} onClose={() => setSelected(null)}>
       <div className="benefit-list">{selected.benefits.map((benefit) => <div key={benefit.label}><span>{benefit.label}</span><strong>{benefit.value}</strong></div>)}</div>

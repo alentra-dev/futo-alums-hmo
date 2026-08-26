@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext';
 import { formatDate, fullName } from '../lib/format';
 import { subscriberEnrollment } from '../lib/enrollmentAccess';
 import { formatNaira } from '../lib/money';
+import { FeeBreakdown } from '../components/FeeBreakdown';
 import { Button, PageHeader, ProgressBar, StatusBadge } from '../components/ui';
 
 export function DashboardPage() {
@@ -14,6 +15,8 @@ export function DashboardPage() {
   const verified = relevantPayments.filter((item) => item.status === 'verified').reduce((sum, item) => sum + item.amountKobo, 0);
   const pending = relevantPayments.filter((item) => item.status === 'pending').reduce((sum, item) => sum + item.amountKobo, 0);
   const outstanding = Math.max(0, enrollment.totalKobo - verified);
+  const selectedPlan = snapshot!.plans.find((plan) => plan.id === enrollment.planId);
+  const premiumKobo = selectedPlan ? (enrollment.category === 'family' ? selectedPlan.familyPremiumKobo : selectedPlan.individualPremiumKobo) : 0;
   const progress = enrollment.totalKobo ? (verified / enrollment.totalKobo) * 100 : 0;
 
   const copyAccount = () => void navigator.clipboard.writeText(paymentAccount.accountNumber);
@@ -22,8 +25,8 @@ export function DashboardPage() {
     <PageHeader eyebrow={`${period.year} enrollment`} title={`Welcome, ${enrollment.principal.firstName}`} description={`Enrollment closes ${formatDate(period.endsAt, snapshot!.program.timezone)}.`} actions={<Button icon={<Banknote size={18} />} onClick={() => location.assign(`${import.meta.env.BASE_URL}payments`)}>Notify payment</Button>} />
 
     <section className="metric-grid">
-      <article className="metric metric--accent"><span className="metric__icon"><HeartPulse size={21} /></span><div><small>Selected plan</small><strong>{snapshot!.plans.find((plan) => plan.id === enrollment.planId)?.name ?? 'Not selected'}</strong><span>{enrollment.category === 'family' ? `${enrollment.dependents.length + 1} covered people` : 'Individual cover'}</span></div></article>
-      <article className="metric"><span className="metric__icon"><Banknote size={21} /></span><div><small>Total payable</small><strong>{formatNaira(enrollment.totalKobo)}</strong><span>Includes the program’s 3% fee</span></div></article>
+      <article className="metric metric--accent"><span className="metric__icon"><HeartPulse size={21} /></span><div><small>Selected plan</small><strong>{selectedPlan?.name ?? 'Not selected'}</strong><span>{enrollment.category === 'family' ? `${enrollment.dependents.length + 1} covered people` : 'Individual cover'}</span></div></article>
+      <article className="metric"><span className="metric__icon"><Banknote size={21} /></span><div><small>Total payable</small><strong>{formatNaira(enrollment.totalKobo)}</strong><span>Includes 3% program fee and 15% transaction tax</span></div></article>
       <article className="metric"><span className="metric__icon"><CheckCircle2 size={21} /></span><div><small>Verified payments</small><strong>{formatNaira(verified)}</strong><span>{pending > 0 ? `${formatNaira(pending)} awaiting review` : 'No pending payments'}</span></div></article>
       <article className="metric"><span className="metric__icon"><CalendarDays size={21} /></span><div><small>Outstanding</small><strong>{formatNaira(outstanding)}</strong><span>{outstanding === 0 ? 'Payment complete' : 'Full payment is strongly encouraged'}</span></div></article>
     </section>
@@ -31,6 +34,7 @@ export function DashboardPage() {
     <section className="dashboard-grid">
       <article className="panel payment-progress">
         <div className="panel__heading"><div><p className="eyebrow">Payment progress</p><h2>{formatNaira(outstanding)} remaining</h2></div><StatusBadge status={outstanding === 0 ? 'Verified' : pending > 0 ? 'Pending' : 'In progress'} /></div>
+        {premiumKobo > 0 && <FeeBreakdown premiumKobo={premiumKobo} compact />}
         <ProgressBar value={progress} label={`${formatNaira(verified)} of ${formatNaira(enrollment.totalKobo)}`} />
         <div className="account-strip">
           <div><small>Pay to</small><strong>{paymentAccount.bank}</strong><span>{paymentAccount.beneficiary}</span></div>

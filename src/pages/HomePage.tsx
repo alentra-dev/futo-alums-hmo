@@ -76,7 +76,7 @@ export function HomePage() {
 
     <section className="home-enrollment">
       <div><p className="eyebrow">Current enrollment</p><h2>{config?.period ? `${config.period.year} applications` : 'Annual applications'}</h2><p>{config?.acceptingApplications ? `Applications are open through ${formatDate(config.period?.endsAt, config.timezone)}. Administrators may extend or close the period when needed.` : 'Enrollment dates and offerings are managed annually by the program administrators.'}</p></div>
-      <dl><div><dt><CalendarDays size={18} />Enrollment window</dt><dd>{config?.period ? `${formatDate(config.period.startsAt, config.timezone)} – ${formatDate(config.period.endsAt, config.timezone)}` : 'June through August'}</dd></div><div><dt><CircleDollarSign size={18} />Subscriber totals</dt><dd>{startingTotal ? `Individual cover from ${startingTotal}` : 'All totals include the disclosed 3% program fee'}</dd></div></dl>
+      <dl><div><dt><CalendarDays size={18} />Enrollment window</dt><dd>{config?.period ? `${formatDate(config.period.startsAt, config.timezone)} – ${formatDate(config.period.endsAt, config.timezone)}` : 'June through August'}</dd></div><div><dt><CircleDollarSign size={18} />Subscriber totals</dt><dd>{startingTotal ? `Individual cover from ${startingTotal}; includes 3% program fee and 15% banking transaction tax` : 'All totals include the disclosed 3% program fee and 15% banking transaction tax'}</dd></div></dl>
       <Link className="home-action home-action--primary" to="/join">View plans and enroll<ArrowRight size={18} /></Link>
     </section>
 
