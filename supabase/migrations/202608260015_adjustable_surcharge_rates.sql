@@ -52,7 +52,7 @@ begin
   select * into v_period from public.enrollment_periods where id=p_period_id for update;
   if v_period.id is null or not public.is_program_admin(v_period.program_id) then raise exception 'Administrator access required'; end if;
   if p_nhis_basis_points not between 0 and 10000 or p_program_basis_points not between 0 and 10000 or p_transaction_basis_points not between 0 and 10000 or p_nhis_basis_points+p_program_basis_points>10000 then
-    raise exception 'Each surcharge rate must be between 0% and 100%, and AVON NHIS plus program fees cannot exceed 100%';
+    raise exception 'Each surcharge rate must be between 0%% and 100%%, and AVON NHIS plus program fees cannot exceed 100%%';
   end if;
   update public.enrollment_periods set
     nhis_fee_basis_points=p_nhis_basis_points,
