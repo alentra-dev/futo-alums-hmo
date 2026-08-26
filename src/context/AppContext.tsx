@@ -92,6 +92,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setLoading(false);
         return;
       }
+      // The database collapses repeated portal loads into one account activity record per local day.
+      void supabase?.rpc('record_portal_sign_in');
       if (authCallbackPending.current) {
         authCallbackPending.current = false;
         window.location.replace(buildFreshAuthUrl(initialUrl.current));

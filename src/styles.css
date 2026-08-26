@@ -269,6 +269,20 @@ textarea { resize: vertical; }
 
 .admin-dashboard-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(300px, .65fr); gap: 18px; }
 .chart-wrap { height: 235px; }
+.icon-command { width: 38px; height: 38px; border: 1px solid var(--line); border-radius: 5px; background: #fff; color: var(--green-700); display: grid; place-items: center; cursor: pointer; }
+.icon-command:disabled { cursor: wait; opacity: .55; }
+.activity-context { min-height: 42px; margin: -8px 0 18px; padding: 10px 12px; display: flex; align-items: center; gap: 8px; border-left: 3px solid var(--gold); background: #fffaf0; color: #695b36; font-size: 11px; }
+.activity-chart-panel { margin-top: 4px; }
+.activity-chart { height: 270px; }
+.activity-range { width: auto; min-width: 240px; grid-template-columns: repeat(3, 1fr); flex: 0 0 auto; }
+.activity-range button { padding: 7px 10px; }
+.activity-legend { padding-top: 12px; border-top: 1px solid var(--line); color: var(--muted); font-size: 10px; }
+.activity-table .data-table__head, .activity-table .data-table__row { grid-template-columns: minmax(220px, 1.5fr) .8fr .6fr 1fr; }
+.activity-table .data-table__row > span:nth-child(3) { display: block; }
+.activity-access { width: fit-content; padding: 4px 7px; border-radius: 4px; background: #eef2ef; color: #536159; font-size: 9px; font-weight: 700; }
+.activity-access--subscriber_linked { background: var(--green-100); color: var(--green-700); }
+.activity-access--admin_only { background: var(--gold-soft); color: #755c1b; }
+.activity-access--applicant { background: #edf3f6; color: #496a7b; }
 .deadline-panel dl { margin: 22px 0; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .deadline-panel dl div { background: var(--surface-2); padding: 10px; display: flex; flex-direction: column; }
 .deadline-panel dt { color: var(--muted); font-size: 9px; }
@@ -418,6 +432,11 @@ textarea { resize: vertical; }
   .settings-plan-list .status { justify-self: end; }
   .audit-list article { grid-template-columns: 34px 1fr; }
   .audit-list article > div:last-child { grid-column: 2; align-items: flex-start; }
+  .activity-chart { height: 230px; }
+  .activity-chart-panel .panel__heading { align-items: stretch; flex-direction: column; }
+  .activity-range { width: 100%; min-width: 0; }
+  .activity-range button { min-width: 0; }
+  .activity-table .data-table__row { grid-template-columns: 1fr 1fr; }
   .login-copy h1 { font-size: 31px; }
   .privacy-page > header { padding: 0 16px; }
   .privacy-page > header .brand strong, .privacy-page > header .brand small { display: none; }

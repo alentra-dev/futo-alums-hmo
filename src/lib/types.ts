@@ -180,3 +180,32 @@ export interface AdminSubscriberApplication extends SubscriberApplication {
   accountEmail: string;
   candidates: DuplicateCandidate[];
 }
+
+export interface PortalActivityDay {
+  date: string;
+  uniqueAccounts: number;
+  subscriberLinked: number;
+  adminOnly: number;
+  applicants: number;
+}
+
+export interface PortalActivityAccount {
+  userId: string;
+  displayName: string;
+  email: string;
+  accessType: 'subscriber_linked' | 'admin_only' | 'applicant';
+  activeDays: number;
+  lastActiveDate: string;
+  lastSeenAt: string;
+}
+
+export interface PortalActivityReport {
+  timezone: string;
+  today: string;
+  todayUnique: number;
+  last7DaysUnique: number;
+  last30DaysUnique: number;
+  returningAccounts: number;
+  daily: PortalActivityDay[];
+  recentAccounts: PortalActivityAccount[];
+}

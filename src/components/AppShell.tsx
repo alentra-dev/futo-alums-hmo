@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Activity, Banknote, ClipboardCheck, FileClock, HeartPulse, LayoutDashboard, LogOut, Menu, Settings, ShieldCheck, UserPlus, Users, X } from 'lucide-react';
+import { Activity, Banknote, ChartNoAxesColumn, ClipboardCheck, FileClock, HeartPulse, LayoutDashboard, LogOut, Menu, Settings, ShieldCheck, UserPlus, Users, X } from 'lucide-react';
 import clsx from 'clsx';
 import { useApp } from '../context/AppContext';
 import { initials } from '../lib/format';
@@ -19,6 +19,7 @@ const adminNav = [
   { to: '/admin/applications', label: 'New subscribers', icon: UserPlus },
   { to: '/admin/enrollees', label: 'Enrollees', icon: Users },
   { to: '/admin/payments', label: 'Payment review', icon: ShieldCheck },
+  { to: '/admin/activity', label: 'Portal activity', icon: ChartNoAxesColumn },
   { to: '/admin/audit', label: 'Audit history', icon: FileClock },
   { to: '/admin/settings', label: 'Program settings', icon: Settings },
 ];
