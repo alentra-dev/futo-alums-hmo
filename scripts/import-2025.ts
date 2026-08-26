@@ -47,7 +47,7 @@ function moneyKobo(row: ExcelJS.Row, header: string) {
 
 function planCode(source: string) {
   const value = source.toUpperCase();
-  if (value.includes('VITAL')) return 'PLUS';
+  if (value.includes('VITAL')) return 'VITAL';
   if (value.includes('EXECUTIVE')) return 'EXECUTIVE_PRESTIGE';
   if (value.includes('PRESTIGE PLUS')) return 'PRESTIGE_PLUS';
   if (value.includes('PREMIUM PLUS')) return 'PREMIUM_PLUS';
@@ -139,7 +139,7 @@ for (const item of households) {
   rates[item.category] = item.premiumKobo;
   observed.set(item.normalizedPlanCode, rates);
 }
-const planNames: Record<string, string> = { PLUS: 'Plus Plan', PREMIUM: 'Premium Plan', PREMIUM_PLUS: 'Premium Plus', PRESTIGE: 'Prestige Plan', PRESTIGE_PLUS: 'Prestige Plus', EXECUTIVE_PRESTIGE: 'Executive Prestige' };
+const planNames: Record<string, string> = { VITAL: 'Vital Plan', PLUS: 'Plus Plan', PREMIUM: 'Premium Plan', PREMIUM_PLUS: 'Premium Plus', PRESTIGE: 'Prestige Plan', PRESTIGE_PLUS: 'Prestige Plus', EXECUTIVE_PRESTIGE: 'Executive Prestige' };
 for (const [code, rates] of observed) {
   const { error } = await supabase.from('plan_offerings').upsert({ period_id: period2025.id, code, name: planNames[code], description: 'Historical 2025 offering', region: 'Nigeria', individual_premium_kobo: rates.individual, family_premium_kobo: rates.family, highlights: [], benefits: [], active: false }, { onConflict: 'period_id,code' });
   if (error) throw new Error(error.message);
