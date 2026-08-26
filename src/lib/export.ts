@@ -1,5 +1,6 @@
 import type { ProgramSnapshot } from './types';
 import { calculateFees } from './money';
+import { surchargeRates } from './surchargeRates';
 import { fullName } from './format';
 
 function saveBuffer(buffer: ArrayBuffer, name: string) {
@@ -40,7 +41,7 @@ export async function createEnrollmentWorkbook(snapshot: ProgramSnapshot, kind: 
     const plan = snapshot.plans.find((item) => item.id === enrollment.planId);
     if (!plan) continue;
     const premiumKobo = enrollment.category === 'family' ? plan.familyPremiumKobo : plan.individualPremiumKobo;
-    const fees = calculateFees(premiumKobo);
+    const fees = calculateFees(premiumKobo, surchargeRates(snapshot.period));
     const verified = snapshot.payments.filter((item) => item.enrollmentId === enrollment.id && item.status === 'verified').reduce((sum, item) => sum + item.amountKobo, 0);
     for (const [index, person] of [enrollment.principal, ...enrollment.dependents].entries()) {
       const row = [

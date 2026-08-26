@@ -5,6 +5,7 @@ import { formatDate, fullName } from '../lib/format';
 import { subscriberEnrollment } from '../lib/enrollmentAccess';
 import { formatNaira } from '../lib/money';
 import { FeeBreakdown } from '../components/FeeBreakdown';
+import { surchargeRates } from '../lib/surchargeRates';
 import { Button, PageHeader, ProgressBar, StatusBadge } from '../components/ui';
 
 export function DashboardPage() {
@@ -26,7 +27,7 @@ export function DashboardPage() {
 
     <section className="metric-grid">
       <article className="metric metric--accent"><span className="metric__icon"><HeartPulse size={21} /></span><div><small>Selected plan</small><strong>{selectedPlan?.name ?? 'Not selected'}</strong><span>{enrollment.category === 'family' ? `${enrollment.dependents.length + 1} covered people` : 'Individual cover'}</span></div></article>
-      <article className="metric"><span className="metric__icon"><Banknote size={21} /></span><div><small>Total payable</small><strong>{formatNaira(enrollment.totalKobo)}</strong><span>Includes 3% program fee and 15% transaction tax</span></div></article>
+      <article className="metric"><span className="metric__icon"><Banknote size={21} /></span><div><small>Total payable</small><strong>{formatNaira(enrollment.totalKobo)}</strong><span>Includes the configured AVON NHIS, program, and transaction fees</span></div></article>
       <article className="metric"><span className="metric__icon"><CheckCircle2 size={21} /></span><div><small>Verified payments</small><strong>{formatNaira(verified)}</strong><span>{pending > 0 ? `${formatNaira(pending)} awaiting review` : 'No pending payments'}</span></div></article>
       <article className="metric"><span className="metric__icon"><CalendarDays size={21} /></span><div><small>Outstanding</small><strong>{formatNaira(outstanding)}</strong><span>{outstanding === 0 ? 'Payment complete' : 'Full payment is strongly encouraged'}</span></div></article>
     </section>
@@ -34,7 +35,7 @@ export function DashboardPage() {
     <section className="dashboard-grid">
       <article className="panel payment-progress">
         <div className="panel__heading"><div><p className="eyebrow">Payment progress</p><h2>{formatNaira(outstanding)} remaining</h2></div><StatusBadge status={outstanding === 0 ? 'Verified' : pending > 0 ? 'Pending' : 'In progress'} /></div>
-        {premiumKobo > 0 && <FeeBreakdown premiumKobo={premiumKobo} compact />}
+        {premiumKobo > 0 && <FeeBreakdown premiumKobo={premiumKobo} rates={surchargeRates(snapshot!.period)} compact />}
         <ProgressBar value={progress} label={`${formatNaira(verified)} of ${formatNaira(enrollment.totalKobo)}`} />
         <div className="account-strip">
           <div><small>Pay to</small><strong>{paymentAccount.bank}</strong><span>{paymentAccount.beneficiary}</span></div>

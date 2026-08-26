@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext';
 import { fullName } from '../lib/format';
 import { subscriberEnrollment } from '../lib/enrollmentAccess';
 import { FeeBreakdown } from '../components/FeeBreakdown';
+import { surchargeRates } from '../lib/surchargeRates';
 import { Button, PageHeader, ProgressBar, StatusBadge } from '../components/ui';
 import { householdValidationMessage, isEnrollmentEditable, MAX_FAMILY_DEPENDENTS } from '../lib/subscriberWorkflow';
 import type { Person } from '../lib/types';
@@ -106,7 +107,7 @@ export function EnrollmentPage() {
         </section>
         <div className="sticky-actions"><span>{editable ? 'Next: notify payment after submission.' : 'This enrollment is read only.'}</span><Button type="submit" disabled={busy || !editable}>{busy ? 'Saving…' : editable ? 'Submit enrollment' : 'Enrollment closed'}</Button></div>
       </form>
-      <aside className="enrollment-summary panel"><p className="eyebrow">At a glance</p><h2>{selectedPlan?.name}</h2><dl><div><dt>Coverage</dt><dd>{draft.category}</dd></div><div><dt>People</dt><dd>{people.length}</dd></div><div><dt>Hospital</dt><dd>{draft.hospital || 'Not selected'}</dd></div><div><dt>Status</dt><dd><StatusBadge status={draft.status} /></dd></div></dl>{selectedPlan && <FeeBreakdown premiumKobo={draft.category === 'family' ? selectedPlan.familyPremiumKobo : selectedPlan.individualPremiumKobo} compact />}</aside>
+      <aside className="enrollment-summary panel"><p className="eyebrow">At a glance</p><h2>{selectedPlan?.name}</h2><dl><div><dt>Coverage</dt><dd>{draft.category}</dd></div><div><dt>People</dt><dd>{people.length}</dd></div><div><dt>Hospital</dt><dd>{draft.hospital || 'Not selected'}</dd></div><div><dt>Status</dt><dd><StatusBadge status={draft.status} /></dd></div></dl>{selectedPlan && <FeeBreakdown premiumKobo={draft.category === 'family' ? selectedPlan.familyPremiumKobo : selectedPlan.individualPremiumKobo} rates={surchargeRates(snapshot!.period)} compact />}</aside>
     </div>
   </>;
 }

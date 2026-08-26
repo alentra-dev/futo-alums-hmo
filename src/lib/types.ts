@@ -88,6 +88,9 @@ export interface EnrollmentPeriod {
   endsAt: string;
   status: 'scheduled' | 'open' | 'closed';
   extensionNote?: string;
+  nhisFeeBasisPoints: number;
+  programFeeBasisPoints: number;
+  transactionTaxBasisPoints: number;
 }
 
 export interface AuditEvent {

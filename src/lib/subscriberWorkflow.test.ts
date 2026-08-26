@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { householdValidationMessage, isEnrollmentEditable, paymentReadinessMessage } from './subscriberWorkflow';
 import type { Enrollment, EnrollmentPeriod } from './types';
 
-const period: EnrollmentPeriod = { id: 'period', year: 2026, status: 'open', startsAt: '2026-06-01T00:00:00Z', endsAt: '2026-08-31T23:59:59Z' };
+const period: EnrollmentPeriod = { id: 'period', year: 2026, status: 'open', startsAt: '2026-06-01T00:00:00Z', endsAt: '2026-08-31T23:59:59Z', nhisFeeBasisPoints: 100, programFeeBasisPoints: 200, transactionTaxBasisPoints: 1500 };
 const enrollment = { planId: 'plus', totalKobo: 100, status: 'submitted' } as Enrollment;
 
 describe('subscriber workflow rules', () => {

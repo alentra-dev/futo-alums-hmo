@@ -5,10 +5,11 @@ import { Link } from 'react-router-dom';
 import { FeeBreakdown } from '../components/FeeBreakdown';
 import { Button } from '../components/ui';
 import { useApp } from '../context/AppContext';
-import { formatNaira, planTotalKobo } from '../lib/money';
+import { formatBasisPoints, formatNaira, planTotalKobo } from '../lib/money';
 import { isDemoMode, supabase } from '../lib/supabase';
 import type { JoinConfig, JoinWorkspace, Person, PlanCategory, SubscriberApplication } from '../lib/types';
 import { LoadingPage } from './LoadingPage';
+import { loadSurchargeRates, surchargeRates, withSurchargeRates } from '../lib/surchargeRates';
 
 function PersonFields({ person, onChange }: { person: Person; onChange: (person: Person) => void }) {
   const field = (key: keyof Person, value: string) => onChange({ ...person, [key]: value });
@@ -34,8 +35,8 @@ function planPremium(plan: JoinConfig['plans'][number], category: PlanCategory) 
   return category === 'family' ? plan.familyPremiumKobo : plan.individualPremiumKobo;
 }
 
-function planAmount(plan: JoinConfig['plans'][number], category: PlanCategory) {
-  return planTotalKobo(planPremium(plan, category));
+function planAmount(plan: JoinConfig['plans'][number], category: PlanCategory, period: JoinConfig['period']) {
+  return planTotalKobo(planPremium(plan, category), surchargeRates(period));
 }
 
 export function JoinPage() {
@@ -59,7 +60,10 @@ export function JoinPage() {
     if (!supabase || isDemoMode) return;
     const { data, error: configError } = await supabase.rpc('get_public_join_config');
     if (configError) throw configError;
-    setConfig(data as JoinConfig);
+    const next = data as JoinConfig;
+    if (!next.period) return setConfig(next);
+    const rates = await loadSurchargeRates(next.period.id);
+    setConfig({ ...next, period: withSurchargeRates(next.period, rates) });
   };
 
   const loadWorkspace = async () => {
@@ -198,8 +202,8 @@ export function JoinPage() {
       </form>
     </section>
     <section className="join-plans">
-      <div className="join-section-title"><p className="eyebrow">{config.period?.year ?? 'Upcoming'} plans</p><h2>Compare subscriber totals</h2><p>Every displayed amount includes the 3% program fee and the separate 15% banking transaction tax applied to the premium plus program fee.</p></div>
-      {config.acceptingApplications ? <div className="plan-grid">{config.plans.map((plan) => <article className="plan-card" key={plan.id}><span className="plan-code">{plan.code.replaceAll('_', ' ')}</span><h2>{plan.name}</h2><p>{plan.description}</p><div className="join-plan-prices"><span><small>Individual</small><strong>{formatNaira(planAmount(plan, 'individual'))}</strong></span><span><small>Family</small><strong>{formatNaira(planAmount(plan, 'family'))}</strong></span></div><ul>{plan.highlights.map((highlight) => <li key={highlight}><Check size={15} />{highlight}</li>)}</ul></article>)}</div> : <div className="info-banner"><ShieldCheck size={19} /><span>New applications are currently closed. The next enrollment period will appear here when administrators open it.</span></div>}
+      <div className="join-section-title"><p className="eyebrow">{config.period?.year ?? 'Upcoming'} plans</p><h2>Compare subscriber totals</h2><p>Every displayed amount includes {formatBasisPoints(config.period?.nhisFeeBasisPoints ?? 100)}% AVON NHIS, {formatBasisPoints(config.period?.programFeeBasisPoints ?? 200)}% program, and {formatBasisPoints(config.period?.transactionTaxBasisPoints ?? 1500)}% banking transaction fees.</p></div>
+      {config.acceptingApplications ? <div className="plan-grid">{config.plans.map((plan) => <article className="plan-card" key={plan.id}><span className="plan-code">{plan.code.replaceAll('_', ' ')}</span><h2>{plan.name}</h2><p>{plan.description}</p><div className="join-plan-prices"><span><small>Individual</small><strong>{formatNaira(planAmount(plan, 'individual', config.period))}</strong></span><span><small>Family</small><strong>{formatNaira(planAmount(plan, 'family', config.period))}</strong></span></div><ul>{plan.highlights.map((highlight) => <li key={highlight}><Check size={15} />{highlight}</li>)}</ul></article>)}</div> : <div className="info-banner"><ShieldCheck size={19} /><span>New applications are currently closed. The next enrollment period will appear here when administrators open it.</span></div>}
     </section>
     <footer className="join-footer"><Link to="/privacy">Privacy notice</Link><span>Privacy contact: Jude Oruoghor</span></footer>
   </main>;
@@ -249,8 +253,8 @@ export function JoinPage() {
             <div className="section-heading"><span><HeartPulse size={20} /></span><div><h2>Plan and hospital</h2><p>Select annual cover for this principal or household.</p></div></div>
             <div className="segmented join-category" role="group" aria-label="Plan type"><button type="button" className={clsx(draft.category === 'individual' && 'active')} onClick={() => setDraft({ ...draft, category: 'individual', dependents: [] })}>Individual</button><button type="button" className={clsx(draft.category === 'family' && 'active')} onClick={() => setDraft({ ...draft, category: 'family' })}>Family</button></div>
             {draft.category === 'family' && <div className="info-banner"><Users size={18} /><span>Family pricing covers a principal, spouse, and up to four biological or legally adopted children under 21.</span></div>}
-            <div className="join-plan-options">{config.plans.map((plan) => <label key={plan.id} className={clsx(draft.planId === plan.id && 'selected')}><input required type="radio" name="plan" checked={draft.planId === plan.id} onChange={() => setDraft({ ...draft, planId: plan.id })} /><span><strong>{plan.name}</strong><small>{plan.region}</small></span><b>{formatNaira(planAmount(plan, draft.category))}</b></label>)}</div>
-            {activePlan && <FeeBreakdown premiumKobo={planPremium(activePlan, draft.category)} />}
+            <div className="join-plan-options">{config.plans.map((plan) => <label key={plan.id} className={clsx(draft.planId === plan.id && 'selected')}><input required type="radio" name="plan" checked={draft.planId === plan.id} onChange={() => setDraft({ ...draft, planId: plan.id })} /><span><strong>{plan.name}</strong><small>{plan.region}</small></span><b>{formatNaira(planAmount(plan, draft.category, config.period))}</b></label>)}</div>
+            {activePlan && <FeeBreakdown premiumKobo={planPremium(activePlan, draft.category)} rates={surchargeRates(config.period)} />}
             <label>Preferred hospital<input required value={draft.hospital} onChange={(event) => setDraft({ ...draft, hospital: event.target.value })} placeholder="Start typing a hospital name" /></label>
             <div className="join-step__actions"><Button type="button" variant="secondary" onClick={() => setStep(1)}>Back</Button><Button disabled={busy === 'save'} icon={<ArrowRight size={17} />}>{busy === 'save' ? 'Saving...' : 'Save and continue'}</Button></div>
           </form>}
@@ -263,8 +267,8 @@ export function JoinPage() {
 
           {step === 4 && <form className="form-section join-step" onSubmit={(event) => { event.preventDefault(); void save(true); }}>
             <div className="section-heading"><span><ShieldCheck size={20} /></span><div><h2>Review and submit</h2><p>Payment becomes available after a quick administrator review.</p></div></div>
-            <div className="application-review"><dl><div><dt>Principal</dt><dd>{draft.principal.firstName} {draft.principal.middleName} {draft.principal.surname}</dd></div><div><dt>Graduation year</dt><dd>{draft.graduationYear}</dd></div><div><dt>Plan</dt><dd>{activePlan?.name ?? 'Not selected'}</dd></div><div><dt>Plan type</dt><dd>{draft.category}</dd></div><div><dt>People covered</dt><dd>{draft.dependents.length + 1}</dd></div><div><dt>Subscriber total</dt><dd>{activePlan ? formatNaira(planAmount(activePlan, draft.category)) : 'Not selected'}</dd></div><div><dt>Hospital</dt><dd>{draft.hospital || 'Not entered'}</dd></div></dl></div>
-            {activePlan && <FeeBreakdown premiumKobo={planPremium(activePlan, draft.category)} />}
+            <div className="application-review"><dl><div><dt>Principal</dt><dd>{draft.principal.firstName} {draft.principal.middleName} {draft.principal.surname}</dd></div><div><dt>Graduation year</dt><dd>{draft.graduationYear}</dd></div><div><dt>Plan</dt><dd>{activePlan?.name ?? 'Not selected'}</dd></div><div><dt>Plan type</dt><dd>{draft.category}</dd></div><div><dt>People covered</dt><dd>{draft.dependents.length + 1}</dd></div><div><dt>Subscriber total</dt><dd>{activePlan ? formatNaira(planAmount(activePlan, draft.category, config.period)) : 'Not selected'}</dd></div><div><dt>Hospital</dt><dd>{draft.hospital || 'Not entered'}</dd></div></dl></div>
+            {activePlan && <FeeBreakdown premiumKobo={planPremium(activePlan, draft.category)} rates={surchargeRates(config.period)} />}
             <label className="consent-box"><input required type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} /><span>I authorize the FUTO Alums HMO Program to process and share this enrollment information with AVON and necessary service providers. I confirm that I am authorized to provide information for each family member and have informed adult family members. Records may be retained for seven years. <Link to="/privacy">Read the privacy notice</Link>.</span></label>
             <div className="join-step__actions"><Button type="button" variant="secondary" onClick={() => setStep(3)}>Back</Button><Button disabled={busy === 'submit'} icon={<ShieldCheck size={17} />}>{busy === 'submit' ? 'Submitting...' : 'Submit for approval'}</Button></div>
           </form>}

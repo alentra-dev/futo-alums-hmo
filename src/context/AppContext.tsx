@@ -3,8 +3,9 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { demoSnapshot } from '../data/demo';
 import { authCallbackError, buildFreshAuthUrl, buildMagicLinkRedirect, hasAuthCallback } from '../lib/authCallback';
 import { fullName } from '../lib/format';
-import { planTotalKobo } from '../lib/money';
+import { planTotalKobo, type SurchargeRates } from '../lib/money';
 import { isDemoMode, supabase } from '../lib/supabase';
+import { loadSurchargeRates, surchargeRates, withSurchargeRates } from '../lib/surchargeRates';
 import type { Enrollment, EnrollmentPeriod, Payment, PaymentAccount, PaymentInput, PaymentStatus, PlanCategory, ProgramSnapshot, Role } from '../lib/types';
 
 interface AppContextValue {
@@ -28,6 +29,7 @@ interface AppContextValue {
   updatePeriod: (changes: Partial<EnrollmentPeriod>) => Promise<void>;
   updatePaymentAccount: (account: PaymentAccount) => Promise<void>;
   updateProgramTimezone: (timezone: string) => Promise<void>;
+  updateSurchargeRates: (rates: SurchargeRates) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -58,11 +60,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (error.message !== 'No active program membership') setNotice(error.message);
       setSnapshot(null);
     } else {
-      setNotice(null);
-      setSnapshot({
-        ...mapSnapshot(snapshotResult.data),
-        subscriberEnrollmentIds: (enrollmentIdsResult.data ?? []) as string[],
-      });
+      const mapped = mapSnapshot(snapshotResult.data);
+      try {
+        const rates = await loadSurchargeRates(mapped.period.id);
+        setNotice(null);
+        setSnapshot({
+          ...mapped,
+          period: withSurchargeRates(mapped.period, rates),
+          subscriberEnrollmentIds: (enrollmentIdsResult.data ?? []) as string[],
+        });
+      } catch (reason) {
+        setNotice(reason instanceof Error ? reason.message : 'Unable to load surcharge rates.');
+        setSnapshot(null);
+      }
     }
     setLoading(false);
   }, []);
@@ -185,7 +195,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const plan = current.plans.find((item) => item.id === planId);
         if (!plan) return enrollment;
         const premium = category === 'family' ? plan.familyPremiumKobo : plan.individualPremiumKobo;
-        return { ...enrollment, planId, category, totalKobo: planTotalKobo(premium), status: 'draft' };
+        return { ...enrollment, planId, category, totalKobo: planTotalKobo(premium, surchargeRates(current.period)), status: 'draft' };
       }),
     }));
     setNotice('Plan selection updated.');
@@ -285,6 +295,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setNotice('Program time zone updated.');
   };
 
+  const updateSurchargeRates = async (rates: SurchargeRates) => {
+    if (!snapshot) return;
+    if (!isDemoMode && supabase) {
+      const { error } = await supabase.rpc('update_enrollment_surcharge_rates', {
+        p_period_id: snapshot.period.id,
+        p_nhis_basis_points: rates.nhisFeeBasisPoints,
+        p_program_basis_points: rates.programFeeBasisPoints,
+        p_transaction_basis_points: rates.transactionTaxBasisPoints,
+      });
+      if (error) throw error;
+      await loadLiveSnapshot();
+      return;
+    }
+    mutateDemo((current) => ({
+      ...current,
+      period: { ...current.period, ...rates },
+      enrollments: current.enrollments.map((enrollment) => {
+        const plan = current.plans.find((item) => item.id === enrollment.planId);
+        if (!plan) return enrollment;
+        const premium = enrollment.category === 'family' ? plan.familyPremiumKobo : plan.individualPremiumKobo;
+        return { ...enrollment, totalKobo: planTotalKobo(premium, rates) };
+      }),
+    }));
+    setNotice('Surcharge rates and enrollment totals updated.');
+  };
+
   const value: AppContextValue = {
     snapshot,
     activeEnrollmentId,
@@ -306,6 +342,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     updatePeriod,
     updatePaymentAccount,
     updateProgramTimezone,
+    updateSurchargeRates,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

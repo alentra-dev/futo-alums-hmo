@@ -5,6 +5,7 @@ import { formatDate, formatDateTime } from '../lib/format';
 import { subscriberEnrollment } from '../lib/enrollmentAccess';
 import { formatNaira, nairaToKobo } from '../lib/money';
 import { FeeBreakdown } from '../components/FeeBreakdown';
+import { surchargeRates } from '../lib/surchargeRates';
 import { Button, EmptyState, Modal, PageHeader, ProgressBar, StatusBadge } from '../components/ui';
 
 export function PaymentsPage() {
@@ -32,7 +33,7 @@ export function PaymentsPage() {
   return <>
     <PageHeader eyebrow={`${snapshot!.period.year} payments`} title="Payments" description="Notify administrators after every transfer, including partial payments." actions={<Button icon={<FileUp size={18} />} onClick={() => setOpen(true)}>Notify payment</Button>} />
     <div className="payment-summary-grid">
-      <article className="panel amount-due"><p className="eyebrow">Total payable</p><strong>{formatNaira(enrollment.totalKobo)}</strong><span>Includes the 3% program fee and separate 15% banking transaction tax</span>{premiumKobo > 0 && <FeeBreakdown premiumKobo={premiumKobo} compact />}<ProgressBar value={enrollment.totalKobo ? (verified / enrollment.totalKobo) * 100 : 0} /><div><span>Verified {formatNaira(verified)}</span><span>Outstanding {formatNaira(outstanding)}</span></div>{pending > 0 && <p className="pending-note"><Info size={16} />{formatNaira(pending)} is awaiting administrator review.</p>}</article>
+      <article className="panel amount-due"><p className="eyebrow">Total payable</p><strong>{formatNaira(enrollment.totalKobo)}</strong><span>Includes the configured AVON NHIS, program, and banking transaction fees</span>{premiumKobo > 0 && <FeeBreakdown premiumKobo={premiumKobo} rates={surchargeRates(snapshot!.period)} compact />}<ProgressBar value={enrollment.totalKobo ? (verified / enrollment.totalKobo) * 100 : 0} /><div><span>Verified {formatNaira(verified)}</span><span>Outstanding {formatNaira(outstanding)}</span></div>{pending > 0 && <p className="pending-note"><Info size={16} />{formatNaira(pending)} is awaiting administrator review.</p>}</article>
       <article className="panel bank-card"><div className="bank-card__head"><Banknote size={22} /><span>Program payment account</span></div><small>Bank</small><strong>{account.bank}</strong><small>Account name</small><strong>{account.beneficiary}</strong><small>Account number</small><div className="account-number"><strong>{account.accountNumber}</strong><button aria-label="Copy account number" title="Copy account number" onClick={() => void navigator.clipboard.writeText(account.accountNumber)}><Copy size={18} /></button></div><p>Use <b>{account.referencePrefix} - {enrollment.principal.firstName} {enrollment.principal.surname}</b> as your transfer reference.</p></article>
     </div>
     <section className="table-section"><div className="section-title"><h2>Payment history</h2><span>{payments.length} notifications</span></div>

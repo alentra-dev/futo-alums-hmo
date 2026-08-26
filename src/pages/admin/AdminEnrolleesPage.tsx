@@ -7,6 +7,7 @@ import { downloadAdminFullWorkbook, downloadAvonWorkbook, downloadSummaryWorkboo
 import { fullName } from '../../lib/format';
 import { formatNaira } from '../../lib/money';
 import { isDemoMode, supabase } from '../../lib/supabase';
+import { loadSurchargeRates, withSurchargeRates } from '../../lib/surchargeRates';
 import type { EnrollmentPeriod, EnrollmentPeriodSnapshot, ProgramSnapshot } from '../../lib/types';
 
 export function AdminEnrolleesPage() {
@@ -52,10 +53,18 @@ export function AdminEnrolleesPage() {
     let active = true;
     setLoadingPeriod(true);
     setPeriodError('');
-    void supabase.rpc('get_admin_enrollment_period', { p_period_id: selectedPeriodId }).then(({ data, error }) => {
+    void supabase.rpc('get_admin_enrollment_period', { p_period_id: selectedPeriodId }).then(async ({ data, error }) => {
       if (!active) return;
       if (error) setPeriodError(error.message);
-      else setPeriodData(data as EnrollmentPeriodSnapshot);
+      else {
+        try {
+          const next = data as EnrollmentPeriodSnapshot;
+          const rates = await loadSurchargeRates(next.period.id);
+          if (active) setPeriodData({ ...next, period: withSurchargeRates(next.period, rates) });
+        } catch (reason) {
+          if (active) setPeriodError(reason instanceof Error ? reason.message : 'Unable to load enrollment year.');
+        }
+      }
       setLoadingPeriod(false);
     });
     return () => { active = false; };

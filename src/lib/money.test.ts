@@ -23,6 +23,12 @@ describe('money calculations', () => {
     expect(result.subscriberTotalKobo).toBe(11_846);
   });
 
+  it('uses administrator-configured rates', () => {
+    expect(calculateFees(10_000, { nhisFeeBasisPoints: 125, programFeeBasisPoints: 250, transactionTaxBasisPoints: 500 })).toMatchObject({
+      nhisFeeKobo: 125, reserveFeeKobo: 250, transactionTaxFeeKobo: 519, subscriberTotalKobo: 10_894,
+    });
+  });
+
   it('keeps the subscriber total equal to all allocations', () => {
     const premium = nairaToKobo('426,453.00');
     const fees = calculateFees(premium);

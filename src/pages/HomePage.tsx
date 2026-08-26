@@ -7,6 +7,7 @@ import { formatNaira, planTotalKobo } from '../lib/money';
 import { isDemoMode, supabase } from '../lib/supabase';
 import type { JoinConfig } from '../lib/types';
 import { formatDate as formatProgramDate } from '../lib/format';
+import { loadSurchargeRates, surchargeRates, withSurchargeRates } from '../lib/surchargeRates';
 
 function formatDate(value?: string, timezone = 'Africa/Lagos') {
   if (!value) return 'Dates to be announced';
@@ -22,11 +23,16 @@ export function HomePage() {
 
   useEffect(() => {
     if (!supabase || isDemoMode) return;
-    void supabase.rpc('get_public_join_config').then(({ data }) => setConfig(data as JoinConfig));
+    void supabase.rpc('get_public_join_config').then(async ({ data }) => {
+      const next = data as JoinConfig;
+      if (!next.period) return setConfig(next);
+      const rates = await loadSurchargeRates(next.period.id);
+      setConfig({ ...next, period: withSurchargeRates(next.period, rates) });
+    });
   }, []);
 
   const startingTotal = useMemo(() => {
-    const premiums = config?.plans.map((plan) => planTotalKobo(plan.individualPremiumKobo)) ?? [];
+    const premiums = config?.plans.map((plan) => planTotalKobo(plan.individualPremiumKobo, surchargeRates(config?.period))) ?? [];
     return premiums.length ? formatNaira(Math.min(...premiums)) : null;
   }, [config]);
 
@@ -76,7 +82,7 @@ export function HomePage() {
 
     <section className="home-enrollment">
       <div><p className="eyebrow">Current enrollment</p><h2>{config?.period ? `${config.period.year} applications` : 'Annual applications'}</h2><p>{config?.acceptingApplications ? `Applications are open through ${formatDate(config.period?.endsAt, config.timezone)}. Administrators may extend or close the period when needed.` : 'Enrollment dates and offerings are managed annually by the program administrators.'}</p></div>
-      <dl><div><dt><CalendarDays size={18} />Enrollment window</dt><dd>{config?.period ? `${formatDate(config.period.startsAt, config.timezone)} – ${formatDate(config.period.endsAt, config.timezone)}` : 'June through August'}</dd></div><div><dt><CircleDollarSign size={18} />Subscriber totals</dt><dd>{startingTotal ? `Individual cover from ${startingTotal}; includes 3% program fee and 15% banking transaction tax` : 'All totals include the disclosed 3% program fee and 15% banking transaction tax'}</dd></div></dl>
+      <dl><div><dt><CalendarDays size={18} />Enrollment window</dt><dd>{config?.period ? `${formatDate(config.period.startsAt, config.timezone)} – ${formatDate(config.period.endsAt, config.timezone)}` : 'June through August'}</dd></div><div><dt><CircleDollarSign size={18} />Subscriber totals</dt><dd>{startingTotal ? `Individual cover from ${startingTotal}; includes all configured surcharges` : 'All totals include the disclosed AVON NHIS, program, and banking transaction fees'}</dd></div></dl>
       <Link className="home-action home-action--primary" to="/join">View plans and enroll<ArrowRight size={18} /></Link>
     </section>
 

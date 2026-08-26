@@ -311,6 +311,8 @@ textarea { resize: vertical; }
 .settings-nav a:hover { background: var(--green-100); color: var(--green-700); }
 .settings-content { display: flex; flex-direction: column; gap: 16px; }
 .form-actions { display: flex; justify-content: flex-end; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
+.surcharge-rate-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.surcharge-formula { margin-top: 14px; padding: 10px 12px; border-left: 3px solid var(--gold); background: var(--gold-soft); color: #695b36; font-size: 10px; }
 .settings-plan-list, .access-list { border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
 .settings-plan-list > div { min-height: 59px; display: grid; grid-template-columns: 1fr .75fr .75fr auto; align-items: center; gap: 12px; padding: 9px 12px; border-bottom: 1px solid var(--line); }
 .settings-plan-list > div:last-child, .access-list > div:last-child { border-bottom: 0; }
@@ -422,6 +424,7 @@ textarea { resize: vertical; }
   .plan-card { min-height: 0; }
   .plan-card > p { min-height: 0; }
   .form-grid { grid-template-columns: 1fr; }
+  .surcharge-rate-grid { grid-template-columns: 1fr; }
   .span-2 { grid-column: auto; }
   .accordion__content { padding: 13px; }
   .sticky-actions { bottom: 73px; }
