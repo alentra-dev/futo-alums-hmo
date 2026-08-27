@@ -50,7 +50,7 @@ Deno.serve(async (request) => {
   const { data: people } = await supabase.from('enrollment_people').select('enrollment_id,person_data')
     .eq('member_type', 'Member').in('enrollment_id', enrollmentIds);
   const matches = (people ?? []).filter((item) => personName(item.person_data as Record<string, string>) === PRINCIPAL_NAME);
-  if (matches.length !== 1) return json({ error: 'Unique Steve Osuoha enrollment not found' }, 409);
+  if (matches.length !== 1) return json({ error: 'Unique Steve Osuoha enrollment not found', householdCount: householdIds.length, enrollmentCount: enrollments?.length ?? 0, principals: (people ?? []).map((item) => ({ enrollmentId: item.enrollment_id, name: personName(item.person_data as Record<string, string>) })) }, 409);
   const enrollment = enrollments!.find((item) => item.id === matches[0].enrollment_id)!;
 
   const { data: plans } = await supabase.from('plan_offerings')
