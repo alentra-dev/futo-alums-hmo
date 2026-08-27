@@ -2,7 +2,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const ACCESS_EMAIL = 'info@prokleenltd.com';
 const PRINCIPAL_NAME = 'steve osuoha';
-const KEY_HASH = '1030adcb5e3551ec35c123fa3937a2ba4e516bcec58cb2867cda7ad360064334';
+const KEY_HASH = '01d9557692f69bac6ed7e76ddb245cc7022425110a8d53fdbc2cc22b2fd8cc06';
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
