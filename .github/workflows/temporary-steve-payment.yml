@@ -1,0 +1,31 @@
+name: Temporary Steve payment maintenance
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Deploy or delete the one-time function
+        required: true
+        type: choice
+        options: [deploy, delete]
+
+permissions:
+  contents: read
+
+jobs:
+  maintain:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_ID: ${{ vars.SUPABASE_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.115.0
+      - name: Deploy one-time function
+        if: inputs.operation == 'deploy'
+        run: supabase functions deploy manual-steve-payment-upload --project-ref "$SUPABASE_PROJECT_ID" --no-verify-jwt
+      - name: Delete one-time function
+        if: inputs.operation == 'delete'
+        run: supabase functions delete manual-steve-payment-upload --project-ref "$SUPABASE_PROJECT_ID" --yes
