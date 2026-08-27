@@ -1,7 +1,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const ACCESS_EMAIL = 'info@prokleenltd.com';
-const PRINCIPAL_NAME = 'steve osuoha';
+const PRINCIPAL_NAME = 'steve nwabuike osuoha';
 const KEY_HASH = '01d9557692f69bac6ed7e76ddb245cc7022425110a8d53fdbc2cc22b2fd8cc06';
 
 function json(body: unknown, status = 200) {
