@@ -2,6 +2,8 @@
 
 Private annual healthcare enrollment and payment administration for the FUTO alumni program. The frontend is deployed through GitHub Pages; authentication, private data, payment proofs, authorization, and audit records live in Supabase.
 
+**Administrator guide:** [Quick cheatsheet and operating summary](docs/ADMIN_CHEATSHEET.md)
+
 ## Local development
 
 ```bash
