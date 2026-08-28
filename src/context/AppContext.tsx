@@ -151,10 +151,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return;
     }
     if (!supabase) throw new Error('Authentication is not configured.');
-    const redirectTo = buildMagicLinkRedirect(
-      window.location.origin,
-      `${import.meta.env.BASE_URL}join`,
-    );
+    // The root path is served directly by GitHub Pages. After authentication,
+    // accounts without a membership are routed to the new-subscriber workspace.
+    const redirectTo = buildMagicLinkRedirect(window.location.origin, import.meta.env.BASE_URL);
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: { shouldCreateUser: true, emailRedirectTo: redirectTo },
