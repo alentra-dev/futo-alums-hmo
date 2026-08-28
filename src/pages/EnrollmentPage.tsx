@@ -2,10 +2,12 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Check, ChevronDown, ChevronUp, Hospital, Info, Plus, ShieldCheck, Trash2, UserRound } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { fullName } from '../lib/format';
+import { errorMessage } from '../lib/errorMessage';
 import { subscriberEnrollment } from '../lib/enrollmentAccess';
 import { FeeBreakdown } from '../components/FeeBreakdown';
 import { surchargeRates } from '../lib/surchargeRates';
 import { Button, PageHeader, ProgressBar, StatusBadge } from '../components/ui';
+import { incompletePersonMessage } from '../lib/personValidation';
 import { householdValidationMessage, isEnrollmentEditable, MAX_FAMILY_DEPENDENTS } from '../lib/subscriberWorkflow';
 import type { Person } from '../lib/types';
 
@@ -62,19 +64,37 @@ export function EnrollmentPage() {
   };
 
 
-  const save = async (event: FormEvent) => {
-    event.preventDefault();
+  const save = async (submit: boolean) => {
     if (!editable) return;
     if (householdIssue) {
       setError(householdIssue);
       return;
     }
+    const invalidPerson = people.map((person, index) => ({ person, message: incompletePersonMessage(person, index === 0 ? 'Principal member' : 'Dependent ' + index) })).find((item) => item.message);
+    if (invalidPerson) {
+      setExpanded(invalidPerson.person.id);
+      setError(invalidPerson.message!);
+      return;
+    }
+    if (submit && !draft.hospital.trim()) {
+      setError('Enter a preferred hospital before submitting the enrollment.');
+      return;
+    }
+    if (submit && !consent) {
+      setError('Confirm the family-data consent before submitting the enrollment.');
+      return;
+    }
     setBusy(true);
     setError('');
     try {
-      await updateEnrollment(draft.id, { ...draft, consentedAt: consent ? new Date().toISOString() : null, status: consent ? 'submitted' : 'draft', completeness: consent ? 100 : draft.completeness });
+      await updateEnrollment(draft.id, {
+        ...draft,
+        consentedAt: submit ? new Date().toISOString() : null,
+        status: submit ? 'submitted' : 'draft',
+        completeness: submit ? 100 : draft.completeness,
+      });
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Unable to save enrollment changes.');
+      setError(errorMessage(reason, 'Unable to save enrollment changes.'));
     } finally { setBusy(false); }
   };
 
@@ -83,7 +103,7 @@ export function EnrollmentPage() {
     {!editable && <div className="info-banner"><Info size={18} /><span>This enrollment period is closed. Details remain available as read-only records.</span></div>}
     {error && <p className="form-error" role="alert">{error}</p>}
     <div className="enrollment-layout">
-      <form className="enrollment-form" onSubmit={save}>
+      <form className="enrollment-form" onSubmit={(event: FormEvent) => { event.preventDefault(); void save(true); }}>
         <section className="panel progress-panel"><div className="panel__heading"><div><p className="eyebrow">Enrollment readiness</p><h2>{draft.completeness === 100 ? 'Ready for submission' : 'Details need attention'}</h2></div><strong>{draft.completeness}%</strong></div><ProgressBar value={draft.completeness} /></section>
 
         <section className="form-section"><div className="section-heading"><span><UserRound size={20} /></span><div><h2>Covered people</h2><p>Review the principal and any dependents included this year.</p></div></div>
@@ -105,7 +125,7 @@ export function EnrollmentPage() {
         <section className="form-section"><div className="section-heading"><span><ShieldCheck size={20} /></span><div><h2>Review and submit</h2><p>This final confirmation sends the enrollment to administrators.</p></div></div>
           <label className="consent-box"><input type="checkbox" disabled={!editable} checked={consent} onChange={(e) => setConsent(e.target.checked)} required /><span>I authorize the FUTO Alums HMO Program to process and share the information in this enrollment with AVON and necessary service providers. I confirm that I am authorized to provide information for each listed family member and have informed adult family members. Records may be retained for seven years. <a href={`${import.meta.env.BASE_URL}privacy`}>Read the privacy notice</a>.</span></label>
         </section>
-        <div className="sticky-actions"><span>{editable ? 'Next: notify payment after submission.' : 'This enrollment is read only.'}</span><Button type="submit" disabled={busy || !editable}>{busy ? 'Saving…' : editable ? 'Submit enrollment' : 'Enrollment closed'}</Button></div>
+        <div className="sticky-actions"><span>{editable ? 'Next: notify payment after submission.' : 'This enrollment is read only.'}</span><div className="sticky-actions__buttons">{editable && <Button type="button" variant="secondary" disabled={busy} onClick={() => void save(false)}>Save progress</Button>}<Button type="submit" disabled={busy || !editable}>{busy ? 'Saving…' : editable ? 'Submit enrollment' : 'Enrollment closed'}</Button></div></div>
       </form>
       <aside className="enrollment-summary panel"><p className="eyebrow">At a glance</p><h2>{selectedPlan?.name}</h2><dl><div><dt>Coverage</dt><dd>{draft.category}</dd></div><div><dt>People</dt><dd>{people.length}</dd></div><div><dt>Hospital</dt><dd>{draft.hospital || 'Not selected'}</dd></div><div><dt>Status</dt><dd><StatusBadge status={draft.status} /></dd></div></dl>{selectedPlan && <FeeBreakdown premiumKobo={draft.category === 'family' ? selectedPlan.familyPremiumKobo : selectedPlan.individualPremiumKobo} rates={surchargeRates(snapshot!.period)} compact />}</aside>
     </div>
