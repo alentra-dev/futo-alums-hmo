@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { householdValidationMessage, isEnrollmentEditable, paymentReadinessMessage } from './subscriberWorkflow';
+import { householdValidationMessage, isEnrollmentEditable, joinStepAfterWorkspaceRefresh, paymentReadinessMessage } from './subscriberWorkflow';
 import type { Enrollment, EnrollmentPeriod } from './types';
 
 const period: EnrollmentPeriod = { id: 'period', year: 2026, status: 'open', startsAt: '2026-06-01T00:00:00Z', endsAt: '2026-08-31T23:59:59Z', nhisFeeBasisPoints: 100, programFeeBasisPoints: 1500 };
 const enrollment = { planId: 'plus', totalKobo: 100, status: 'submitted' } as Enrollment;
 
 describe('subscriber workflow rules', () => {
+  it('preserves application progress when a successful save refreshes the same draft', () => {
+    expect(joinStepAfterWorkspaceRefresh(2, 'application-a', 'application-a')).toBe(2);
+    expect(joinStepAfterWorkspaceRefresh(3, 'application-a', 'application-b')).toBe(1);
+  });
+
   it('only permits edits inside an open enrollment window', () => {
     expect(isEnrollmentEditable(period, new Date('2026-08-20T00:00:00Z'))).toBe(true);
     expect(isEnrollmentEditable({ ...period, status: 'closed' }, new Date('2026-08-20T00:00:00Z'))).toBe(false);

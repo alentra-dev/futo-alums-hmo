@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { ArrowLeft, ArrowRight, Check, HeartPulse, LogOut, Plus, ShieldCheck, Trash2, UserPlus, Users } from 'lucide-react';
 import clsx from 'clsx';
 import { Link } from 'react-router-dom';
@@ -7,6 +7,7 @@ import { PersonFields } from '../components/PersonFields';
 import { Button } from '../components/ui';
 import { useApp } from '../context/AppContext';
 import { syncDependentResidences } from '../lib/personDetails';
+import { joinStepAfterWorkspaceRefresh } from '../lib/subscriberWorkflow';
 import { formatBasisPoints, formatNaira, planTotalKobo } from '../lib/money';
 import { isDemoMode, supabase } from '../lib/supabase';
 import type { JoinConfig, JoinWorkspace, Person, PlanCategory, SubscriberApplication } from '../lib/types';
@@ -37,6 +38,7 @@ export function JoinPage() {
   const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
+  const displayedApplicationId = useRef('');
 
   const loadConfig = async () => {
     if (!supabase || isDemoMode) return;
@@ -72,9 +74,11 @@ export function JoinPage() {
 
   useEffect(() => {
     const selected = workspace?.applications.find((application) => application.id === activeId) ?? null;
+    const selectedId = selected?.id ?? '';
     setDraft(selected);
     setConsent(Boolean(selected?.consentedAt));
-    setStep(1);
+    setStep((current) => joinStepAfterWorkspaceRefresh(current, displayedApplicationId.current, selectedId));
+    displayedApplicationId.current = selectedId;
   }, [activeId, workspace]);
 
   const activePlan = useMemo(() => config?.plans.find((plan) => plan.id === draft?.planId) ?? null, [config, draft?.planId]);

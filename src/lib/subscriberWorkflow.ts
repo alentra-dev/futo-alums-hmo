@@ -2,6 +2,10 @@ import type { Enrollment, EnrollmentPeriod, PlanCategory } from './types';
 
 export const MAX_FAMILY_DEPENDENTS = 5;
 
+export function joinStepAfterWorkspaceRefresh(currentStep: number, displayedApplicationId: string, selectedApplicationId: string) {
+  return displayedApplicationId === selectedApplicationId ? currentStep : 1;
+}
+
 export function isEnrollmentEditable(period: EnrollmentPeriod, now = new Date()) {
   const current = now.getTime();
   return period.status === 'open'
