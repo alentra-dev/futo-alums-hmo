@@ -5,31 +5,13 @@ import { fullName } from '../lib/format';
 import { errorMessage } from '../lib/errorMessage';
 import { subscriberEnrollment } from '../lib/enrollmentAccess';
 import { FeeBreakdown } from '../components/FeeBreakdown';
+import { PersonFields } from '../components/PersonFields';
 import { surchargeRates } from '../lib/surchargeRates';
 import { Button, PageHeader, ProgressBar, StatusBadge } from '../components/ui';
 import { incompletePersonMessage } from '../lib/personValidation';
+import { syncDependentResidences } from '../lib/personDetails';
 import { householdValidationMessage, isEnrollmentEditable, MAX_FAMILY_DEPENDENTS } from '../lib/subscriberWorkflow';
 import type { Person } from '../lib/types';
-
-function PersonFields({ person, onChange }: { person: Person; onChange: (person: Person) => void }) {
-  const field = (key: keyof Person, value: string) => onChange({ ...person, [key]: value });
-  return <div className="form-grid">
-    <label>Surname<input required value={person.surname} onChange={(e) => field('surname', e.target.value)} /></label>
-    <label>First name<input required value={person.firstName} onChange={(e) => field('firstName', e.target.value)} /></label>
-    <label>Middle name<input required value={person.middleName} onChange={(e) => field('middleName', e.target.value)} /></label>
-    <label>Date of birth<input required type="date" value={person.dateOfBirth} onChange={(e) => field('dateOfBirth', e.target.value)} /></label>
-    <label>Gender<select value={person.gender} onChange={(e) => field('gender', e.target.value)}><option>Female</option><option>Male</option></select></label>
-    <label>Relationship<input required value={person.relation} onChange={(e) => field('relation', e.target.value)} /></label>
-    <label>Nationality<input required value={person.nationality} onChange={(e) => field('nationality', e.target.value)} /></label>
-    <label>Mobile number<input required inputMode="tel" value={person.mobile} onChange={(e) => field('mobile', e.target.value)} /></label>
-    <label className="span-2">Email<input required type="email" value={person.email} onChange={(e) => field('email', e.target.value)} /></label>
-    <label className="span-2">Residential address<textarea required rows={2} value={person.address} onChange={(e) => field('address', e.target.value)} /></label>
-    <label>Country<input required value={person.country} onChange={(e) => field('country', e.target.value)} /></label>
-    <label>State<input required value={person.state} onChange={(e) => field('state', e.target.value)} /></label>
-    <label>Town<input required value={person.town} onChange={(e) => field('town', e.target.value)} /></label>
-    <label>LGA<input required value={person.lga} onChange={(e) => field('lga', e.target.value)} /></label>
-  </div>;
-}
 
 export function EnrollmentPage() {
   const { snapshot, activeEnrollmentId, updateEnrollment } = useApp();
@@ -52,7 +34,7 @@ export function EnrollmentPage() {
   }, [original]);
 
   const replacePerson = (person: Person) => {
-    if (person.id === draft.principal.id) setDraft({ ...draft, principal: person });
+    if (person.id === draft.principal.id) setDraft({ ...draft, principal: person, dependents: syncDependentResidences(draft.principal, person, draft.dependents) });
     else setDraft({ ...draft, dependents: draft.dependents.map((item) => item.id === person.id ? person : item) });
   };
 
@@ -74,10 +56,6 @@ export function EnrollmentPage() {
     if (invalidPerson) {
       setExpanded(invalidPerson.person.id);
       setError(invalidPerson.message!);
-      return;
-    }
-    if (submit && !draft.hospital.trim()) {
-      setError('Enter a preferred hospital before submitting the enrollment.');
       return;
     }
     if (submit && !consent) {
@@ -110,15 +88,15 @@ export function EnrollmentPage() {
           <div className="accordion-list">
             {people.map((person, index) => <article className="accordion" key={person.id}>
               <button type="button" className="accordion__trigger" onClick={() => setExpanded(expanded === person.id ? '' : person.id)}><span className="person-dot">{person.firstName[0]}</span><span><strong>{fullName(person)}</strong><small>{index === 0 ? 'Principal member' : person.relation.toLowerCase()}</small></span><Check size={17} />{expanded === person.id ? <ChevronUp size={19} /> : <ChevronDown size={19} />}</button>
-              {expanded === person.id && <div className="accordion__content"><fieldset disabled={!editable}><PersonFields person={person} onChange={replacePerson} /></fieldset>{index > 0 && editable && <Button type="button" variant="danger" icon={<Trash2 size={17} />} onClick={() => removeDependent(person)}>Remove dependent</Button>}</div>}
+              {expanded === person.id && <div className="accordion__content"><fieldset disabled={!editable}><PersonFields person={person} principal={index > 0 ? draft.principal : undefined} onChange={replacePerson} /></fieldset>{index > 0 && editable && <Button type="button" variant="danger" icon={<Trash2 size={17} />} onClick={() => removeDependent(person)}>Remove dependent</Button>}</div>}
             </article>)}
           </div>
-          {draft.category === 'family' && editable && <Button type="button" variant="secondary" icon={<Plus size={18} />} disabled={draft.dependents.length >= MAX_FAMILY_DEPENDENTS} onClick={() => setDraft({ ...draft, dependents: [...draft.dependents, { ...draft.principal, id: crypto.randomUUID(), memberType: 'Dependent', firstName: '', middleName: '', relation: '', dateOfBirth: '', email: draft.principal.email }] })}>{draft.dependents.length >= MAX_FAMILY_DEPENDENTS ? 'Dependent limit reached' : 'Add dependent'}</Button>}
+          {draft.category === 'family' && editable && <Button type="button" variant="secondary" icon={<Plus size={18} />} disabled={draft.dependents.length >= MAX_FAMILY_DEPENDENTS} onClick={() => setDraft({ ...draft, dependents: [...draft.dependents, { ...draft.principal, id: crypto.randomUUID(), memberType: 'Dependent', firstName: '', middleName: '', relation: '', dateOfBirth: '', mobile: '', email: '' }] })}>{draft.dependents.length >= MAX_FAMILY_DEPENDENTS ? 'Dependent limit reached' : 'Add dependent'}</Button>}
         </section>
 
-        <section className="form-section"><div className="section-heading"><span><Hospital size={20} /></span><div><h2>Care preference</h2><p>Confirm the selected plan and enter the preferred hospital.</p></div></div>
+        <section className="form-section"><div className="section-heading"><span><Hospital size={20} /></span><div><h2>Care preference</h2><p>Confirm the selected plan and add a preferred hospital when known.</p></div></div>
           <div className="selection-summary"><div><small>Selected plan</small><strong>{selectedPlan?.name ?? 'No plan selected'}</strong><span>{draft.category} coverage</span></div>{editable && <a href={`${import.meta.env.BASE_URL}plans`}>Change plan</a>}</div>
-          <label>Preferred hospital<input required disabled={!editable} list="hospitals" value={draft.hospital} onChange={(e) => setDraft({ ...draft, hospital: e.target.value })} placeholder="Start typing a hospital name" /></label>
+          <label>Preferred hospital (optional)<input disabled={!editable} list="hospitals" value={draft.hospital} onChange={(e) => setDraft({ ...draft, hospital: e.target.value })} placeholder="Start typing a hospital name" /></label>
           <datalist id="hospitals">{snapshot!.hospitalSuggestions.map((hospital) => <option key={hospital} value={hospital} />)}</datalist>
         </section>
 
@@ -127,7 +105,7 @@ export function EnrollmentPage() {
         </section>
         <div className="sticky-actions"><span>{editable ? 'Next: notify payment after submission.' : 'This enrollment is read only.'}</span><div className="sticky-actions__buttons">{editable && <Button type="button" variant="secondary" disabled={busy} onClick={() => void save(false)}>Save progress</Button>}<Button type="submit" disabled={busy || !editable}>{busy ? 'Saving…' : editable ? 'Submit enrollment' : 'Enrollment closed'}</Button></div></div>
       </form>
-      <aside className="enrollment-summary panel"><p className="eyebrow">At a glance</p><h2>{selectedPlan?.name}</h2><dl><div><dt>Coverage</dt><dd>{draft.category}</dd></div><div><dt>People</dt><dd>{people.length}</dd></div><div><dt>Hospital</dt><dd>{draft.hospital || 'Not selected'}</dd></div><div><dt>Status</dt><dd><StatusBadge status={draft.status} /></dd></div></dl>{selectedPlan && <FeeBreakdown premiumKobo={draft.category === 'family' ? selectedPlan.familyPremiumKobo : selectedPlan.individualPremiumKobo} rates={surchargeRates(snapshot!.period)} compact />}</aside>
+      <aside className="enrollment-summary panel"><p className="eyebrow">At a glance</p><h2>{selectedPlan?.name}</h2><dl><div><dt>Coverage</dt><dd>{draft.category}</dd></div><div><dt>People</dt><dd>{people.length}</dd></div><div><dt>Hospital</dt><dd>{draft.hospital || 'Not provided'}</dd></div><div><dt>Status</dt><dd><StatusBadge status={draft.status} /></dd></div></dl>{selectedPlan && <FeeBreakdown premiumKobo={draft.category === 'family' ? selectedPlan.familyPremiumKobo : selectedPlan.individualPremiumKobo} rates={surchargeRates(snapshot!.period)} compact />}</aside>
     </div>
   </>;
 }

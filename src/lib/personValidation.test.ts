@@ -2,20 +2,29 @@ import { describe, expect, it } from 'vitest';
 import { incompletePersonMessage } from './personValidation';
 import type { Person } from './types';
 
-const completePerson: Person = {
-  id: 'person-1', enrollmentDate: '2026-06-01', memberType: 'Dependent', surname: 'Doe', firstName: 'John', middleName: 'N/A',
+const completeDependent: Person = {
+  id: 'person-1', enrollmentDate: '2026-06-01', memberType: 'Dependent', surname: 'Doe', firstName: 'John', middleName: '',
   dateOfBirth: '1980-01-01', gender: 'Male', relation: 'Husband', nationality: 'Nigerian',
-  address: '1 Main Street', country: 'Nigeria', state: 'Lagos', town: 'Lagos', lga: 'Ikeja',
-  mobile: '08012345678', email: 'john@example.com',
+  address: '1 Main Street', country: 'Nigeria', state: 'Lagos', town: 'Lagos', lga: 'Ikeja', mobile: '', email: '',
 };
 
 describe('incompletePersonMessage', () => {
-  it('accepts a complete dependent', () => {
-    expect(incompletePersonMessage(completePerson, 'Dependent 5')).toBeNull();
+  it('accepts optional middle name and dependent contact details', () => {
+    expect(incompletePersonMessage(completeDependent, 'Dependent 5')).toBeNull();
   });
 
-  it('identifies missing fields and explains the middle-name fallback', () => {
-    expect(incompletePersonMessage({ ...completePerson, middleName: '', mobile: '' }, 'Dependent 5'))
-      .toBe('Dependent 5: complete middle name (enter N/A if none), mobile number.');
+  it('requires principal contact details', () => {
+    expect(incompletePersonMessage({ ...completeDependent, memberType: 'Member' }, 'Principal member'))
+      .toBe('Principal member: complete mobile number, email.');
+  });
+
+  it('validates optional contact details when provided', () => {
+    expect(incompletePersonMessage({ ...completeDependent, mobile: '123', email: 'invalid' }, 'Dependent 5'))
+      .toBe('Dependent 5: enter a valid mobile number.');
+  });
+
+  it('still requires complete residence details', () => {
+    expect(incompletePersonMessage({ ...completeDependent, lga: '' }, 'Dependent 5'))
+      .toBe('Dependent 5: complete LGA.');
   });
 });

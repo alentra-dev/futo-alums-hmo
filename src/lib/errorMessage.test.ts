@@ -7,7 +7,7 @@ describe('errorMessage', () => {
   });
 
   it('uses error-like API responses', () => {
-    expect(errorMessage({ message: 'Plan and hospital are required' }, 'Fallback')).toBe('Plan and hospital are required');
+    expect(errorMessage({ message: 'Plan is required' }, 'Fallback')).toBe('Plan is required');
   });
 
   it('falls back for an unknown error shape', () => {

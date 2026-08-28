@@ -3,12 +3,9 @@ import type { Person } from './types';
 const REQUIRED_PERSON_FIELDS: Array<[keyof Person, string]> = [
   ['surname', 'surname'],
   ['firstName', 'first name'],
-  ['middleName', 'middle name (enter N/A if none)'],
   ['dateOfBirth', 'date of birth'],
   ['relation', 'relationship'],
   ['nationality', 'nationality'],
-  ['mobile', 'mobile number'],
-  ['email', 'email'],
   ['address', 'residential address'],
   ['country', 'country'],
   ['state', 'state'],
@@ -16,11 +13,19 @@ const REQUIRED_PERSON_FIELDS: Array<[keyof Person, string]> = [
   ['lga', 'LGA'],
 ];
 
+function normalizedPhone(value: string) {
+  return value.replaceAll(/\D/g, '');
+}
+
 export function incompletePersonMessage(person: Person, label: string) {
-  const missing = REQUIRED_PERSON_FIELDS
+  const required = person.memberType === 'Member'
+    ? [...REQUIRED_PERSON_FIELDS, ['mobile', 'mobile number'], ['email', 'email']] as Array<[keyof Person, string]>
+    : REQUIRED_PERSON_FIELDS;
+  const missing = required
     .filter(([field]) => !String(person[field] ?? '').trim())
     .map(([, name]) => name);
   if (missing.length) return `${label}: complete ${missing.join(', ')}.`;
-  if (!person.email.includes('@')) return `${label}: enter a valid email address.`;
+  if (person.mobile.trim() && normalizedPhone(person.mobile).length < 10) return `${label}: enter a valid mobile number.`;
+  if (person.email.trim() && !person.email.includes('@')) return `${label}: enter a valid email address.`;
   return null;
 }

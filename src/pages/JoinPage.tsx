@@ -3,33 +3,15 @@ import { ArrowLeft, ArrowRight, Check, HeartPulse, LogOut, Plus, ShieldCheck, Tr
 import clsx from 'clsx';
 import { Link } from 'react-router-dom';
 import { FeeBreakdown } from '../components/FeeBreakdown';
+import { PersonFields } from '../components/PersonFields';
 import { Button } from '../components/ui';
 import { useApp } from '../context/AppContext';
+import { syncDependentResidences } from '../lib/personDetails';
 import { formatBasisPoints, formatNaira, planTotalKobo } from '../lib/money';
 import { isDemoMode, supabase } from '../lib/supabase';
 import type { JoinConfig, JoinWorkspace, Person, PlanCategory, SubscriberApplication } from '../lib/types';
 import { LoadingPage } from './LoadingPage';
 import { loadSurchargeRates, surchargeRates, withSurchargeRates } from '../lib/surchargeRates';
-
-function PersonFields({ person, onChange }: { person: Person; onChange: (person: Person) => void }) {
-  const field = (key: keyof Person, value: string) => onChange({ ...person, [key]: value });
-  return <div className="form-grid">
-    <label>Surname<input required autoComplete="family-name" value={person.surname} onChange={(event) => field('surname', event.target.value)} /></label>
-    <label>First name<input required autoComplete="given-name" value={person.firstName} onChange={(event) => field('firstName', event.target.value)} /></label>
-    <label>Middle name<input required value={person.middleName} onChange={(event) => field('middleName', event.target.value)} placeholder="Enter N/A if none" /></label>
-    <label>Date of birth<input required type="date" value={person.dateOfBirth} onChange={(event) => field('dateOfBirth', event.target.value)} /></label>
-    <label>Gender<select value={person.gender} onChange={(event) => field('gender', event.target.value)}><option>Female</option><option>Male</option></select></label>
-    <label>Relationship<input required value={person.relation} onChange={(event) => field('relation', event.target.value)} /></label>
-    <label>Nationality<input required value={person.nationality} onChange={(event) => field('nationality', event.target.value)} /></label>
-    <label>Mobile number<input required inputMode="tel" autoComplete="tel" value={person.mobile} onChange={(event) => field('mobile', event.target.value)} /></label>
-    <label className="span-2">Email<input required type="email" autoComplete="email" value={person.email} onChange={(event) => field('email', event.target.value)} /></label>
-    <label className="span-2">Residential address<textarea required rows={2} value={person.address} onChange={(event) => field('address', event.target.value)} /></label>
-    <label>Country<input required value={person.country} onChange={(event) => field('country', event.target.value)} /></label>
-    <label>State<input required value={person.state} onChange={(event) => field('state', event.target.value)} /></label>
-    <label>Town<input required value={person.town} onChange={(event) => field('town', event.target.value)} /></label>
-    <label>LGA<input required value={person.lga} onChange={(event) => field('lga', event.target.value)} /></label>
-  </div>;
-}
 
 function planPremium(plan: JoinConfig['plans'][number], category: PlanCategory) {
   return category === 'family' ? plan.familyPremiumKobo : plan.individualPremiumKobo;
@@ -156,7 +138,11 @@ export function JoinPage() {
 
   const updatePerson = (person: Person) => {
     if (!draft) return;
-    setDraft({ ...draft, principal: person });
+    setDraft({
+      ...draft,
+      principal: person,
+      dependents: syncDependentResidences(draft.principal, person, draft.dependents),
+    });
   };
 
   const updateDependent = (person: Person) => {
@@ -177,6 +163,8 @@ export function JoinPage() {
         surname: '',
         relation: '',
         dateOfBirth: '',
+        mobile: '',
+        email: '',
       }],
     });
   };
@@ -250,24 +238,24 @@ export function JoinPage() {
           </form>}
 
           {step === 2 && <form className="form-section join-step" onSubmit={(event) => { event.preventDefault(); void save(false); }}>
-            <div className="section-heading"><span><HeartPulse size={20} /></span><div><h2>Plan and hospital</h2><p>Select annual cover for this principal or household.</p></div></div>
+            <div className="section-heading"><span><HeartPulse size={20} /></span><div><h2>Plan and care preference</h2><p>Select annual cover and optionally record a preferred hospital.</p></div></div>
             <div className="segmented join-category" role="group" aria-label="Plan type"><button type="button" className={clsx(draft.category === 'individual' && 'active')} onClick={() => setDraft({ ...draft, category: 'individual', dependents: [] })}>Individual</button><button type="button" className={clsx(draft.category === 'family' && 'active')} onClick={() => setDraft({ ...draft, category: 'family' })}>Family</button></div>
             {draft.category === 'family' && <div className="info-banner"><Users size={18} /><span>Family pricing covers a principal, spouse, and up to four biological or legally adopted children under 21.</span></div>}
             <div className="join-plan-options">{config.plans.map((plan) => <label key={plan.id} className={clsx(draft.planId === plan.id && 'selected')}><input required type="radio" name="plan" checked={draft.planId === plan.id} onChange={() => setDraft({ ...draft, planId: plan.id })} /><span><strong>{plan.name}</strong><small>{plan.region}</small></span><b>{formatNaira(planAmount(plan, draft.category, config.period))}</b></label>)}</div>
             {activePlan && <FeeBreakdown premiumKobo={planPremium(activePlan, draft.category)} rates={surchargeRates(config.period)} />}
-            <label>Preferred hospital<input required value={draft.hospital} onChange={(event) => setDraft({ ...draft, hospital: event.target.value })} placeholder="Start typing a hospital name" /></label>
+            <label>Preferred hospital (optional)<input value={draft.hospital} onChange={(event) => setDraft({ ...draft, hospital: event.target.value })} placeholder="Start typing a hospital name" /></label>
             <div className="join-step__actions"><Button type="button" variant="secondary" onClick={() => setStep(1)}>Back</Button><Button disabled={busy === 'save'} icon={<ArrowRight size={17} />}>{busy === 'save' ? 'Saving...' : 'Save and continue'}</Button></div>
           </form>}
 
           {step === 3 && <form className="form-section join-step" onSubmit={(event) => { event.preventDefault(); void save(false); }}>
-            <div className="section-heading"><span><Users size={20} /></span><div><h2>{draft.category === 'family' ? 'Family members' : 'Individual coverage'}</h2><p>{draft.category === 'family' ? 'All dependent fields are required for AVON.' : 'No dependent information is needed.'}</p></div></div>
-            {draft.category === 'family' ? <div className="join-dependents">{draft.dependents.map((dependent, index) => <section key={dependent.id}><header><strong>Dependent {index + 1}</strong><button type="button" title="Remove dependent" aria-label="Remove dependent" onClick={() => setDraft({ ...draft, dependents: draft.dependents.filter((item) => item.id !== dependent.id) })}><Trash2 size={17} /></button></header><PersonFields person={dependent} onChange={updateDependent} /></section>)}<Button type="button" variant="secondary" icon={<Plus size={17} />} disabled={draft.dependents.length >= 5} onClick={addDependent}>Add dependent</Button></div> : <div className="join-individual-note"><UserPlus size={26} /><span><strong>{draft.principal.firstName} {draft.principal.surname}</strong><small>Principal member only</small></span></div>}
+            <div className="section-heading"><span><Users size={20} /></span><div><h2>{draft.category === 'family' ? 'Family members' : 'Individual coverage'}</h2><p>{draft.category === 'family' ? 'Identity and residence details are required. Personal contact details are optional.' : 'No dependent information is needed.'}</p></div></div>
+            {draft.category === 'family' ? <div className="join-dependents">{draft.dependents.map((dependent, index) => <section key={dependent.id}><header><strong>Dependent {index + 1}</strong><button type="button" title="Remove dependent" aria-label="Remove dependent" onClick={() => setDraft({ ...draft, dependents: draft.dependents.filter((item) => item.id !== dependent.id) })}><Trash2 size={17} /></button></header><PersonFields person={dependent} principal={draft.principal} onChange={updateDependent} /></section>)}<Button type="button" variant="secondary" icon={<Plus size={17} />} disabled={draft.dependents.length >= 5} onClick={addDependent}>Add dependent</Button></div> : <div className="join-individual-note"><UserPlus size={26} /><span><strong>{draft.principal.firstName} {draft.principal.surname}</strong><small>Principal member only</small></span></div>}
             <div className="join-step__actions"><Button type="button" variant="secondary" onClick={() => setStep(2)}>Back</Button><Button disabled={busy === 'save'} icon={<ArrowRight size={17} />}>{busy === 'save' ? 'Saving...' : 'Save and continue'}</Button></div>
           </form>}
 
           {step === 4 && <form className="form-section join-step" onSubmit={(event) => { event.preventDefault(); void save(true); }}>
             <div className="section-heading"><span><ShieldCheck size={20} /></span><div><h2>Review and submit</h2><p>Payment becomes available after a quick administrator review.</p></div></div>
-            <div className="application-review"><dl><div><dt>Principal</dt><dd>{draft.principal.firstName} {draft.principal.middleName} {draft.principal.surname}</dd></div><div><dt>Graduation year</dt><dd>{draft.graduationYear}</dd></div><div><dt>Plan</dt><dd>{activePlan?.name ?? 'Not selected'}</dd></div><div><dt>Plan type</dt><dd>{draft.category}</dd></div><div><dt>People covered</dt><dd>{draft.dependents.length + 1}</dd></div><div><dt>Subscriber total</dt><dd>{activePlan ? formatNaira(planAmount(activePlan, draft.category, config.period)) : 'Not selected'}</dd></div><div><dt>Hospital</dt><dd>{draft.hospital || 'Not entered'}</dd></div></dl></div>
+            <div className="application-review"><dl><div><dt>Principal</dt><dd>{draft.principal.firstName} {draft.principal.middleName} {draft.principal.surname}</dd></div><div><dt>Graduation year</dt><dd>{draft.graduationYear}</dd></div><div><dt>Plan</dt><dd>{activePlan?.name ?? 'Not selected'}</dd></div><div><dt>Plan type</dt><dd>{draft.category}</dd></div><div><dt>People covered</dt><dd>{draft.dependents.length + 1}</dd></div><div><dt>Subscriber total</dt><dd>{activePlan ? formatNaira(planAmount(activePlan, draft.category, config.period)) : 'Not selected'}</dd></div><div><dt>Hospital</dt><dd>{draft.hospital || 'Not provided'}</dd></div></dl></div>
             {activePlan && <FeeBreakdown premiumKobo={planPremium(activePlan, draft.category)} rates={surchargeRates(config.period)} />}
             <label className="consent-box"><input required type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} /><span>I authorize the FUTO Alums HMO Program to process and share this enrollment information with AVON and necessary service providers. I confirm that I am authorized to provide information for each family member and have informed adult family members. Records may be retained for seven years. <Link to="/privacy">Read the privacy notice</Link>.</span></label>
             <div className="join-step__actions"><Button type="button" variant="secondary" onClick={() => setStep(3)}>Back</Button><Button disabled={busy === 'submit'} icon={<ShieldCheck size={17} />}>{busy === 'submit' ? 'Submitting...' : 'Submit for approval'}</Button></div>

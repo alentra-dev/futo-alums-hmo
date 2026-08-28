@@ -2,6 +2,7 @@ import type { ProgramSnapshot } from './types';
 import { calculateFees } from './money';
 import { surchargeRates } from './surchargeRates';
 import { fullName } from './format';
+import { providerContact } from './personDetails';
 
 function saveBuffer(buffer: ArrayBuffer, name: string) {
   const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -44,10 +45,11 @@ export async function createEnrollmentWorkbook(snapshot: ProgramSnapshot, kind: 
     const fees = calculateFees(premiumKobo, surchargeRates(snapshot.period));
     const verified = snapshot.payments.filter((item) => item.enrollmentId === enrollment.id && item.status === 'verified').reduce((sum, item) => sum + item.amountKobo, 0);
     for (const [index, person] of [enrollment.principal, ...enrollment.dependents].entries()) {
+      const contact = adminFull ? { mobile: person.mobile, email: person.email } : providerContact(person, enrollment.principal);
       const row = [
         new Date().toISOString(), serial++, person.memberType, person.surname.toUpperCase(), person.firstName.toUpperCase(), person.middleName.toUpperCase(),
         dateForAvon(person.dateOfBirth), person.gender, person.relation, person.nationality, '', '', dateForAvon(person.enrollmentDate), person.address,
-        person.country, person.state, person.town, person.lga, person.mobile, person.email, enrollment.category.toUpperCase(), enrollment.hospital,
+        person.country, person.state, person.town, person.lga, contact.mobile, contact.email, enrollment.category.toUpperCase(), enrollment.hospital,
         `${plan.name.toUpperCase()} (${enrollment.category.toUpperCase()})`, 'FUTO Alumni HMO',
         index === 0 ? verified / 100 : '', index === 0 ? premiumKobo / 100 : '', index === 0 ? (premiumKobo + fees.nhisFeeKobo) / 100 : '',
         index === 0 ? Math.max(0, premiumKobo + fees.nhisFeeKobo - verified) / 100 : '',

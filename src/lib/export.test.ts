@@ -42,4 +42,27 @@ describe('enrollment export columns', () => {
     expect(await rows('avon')).toBe(1);
     expect(await rows('admin')).toBeGreaterThan(1);
   });
+
+  it('uses principal contact details only for blank dependent fields in the AVON export', async () => {
+    const ExcelJS = await import('exceljs');
+    const enrollment = demoSnapshot.enrollments[0];
+    const dependent = { ...enrollment.dependents[0], middleName: '', mobile: '', email: '' };
+    const snapshot = {
+      ...demoSnapshot,
+      enrollments: [{ ...enrollment, status: 'submitted' as const, dependents: [dependent] }],
+    };
+    const dependentValue = async (kind: 'avon' | 'admin', column: string) => {
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(await createEnrollmentWorkbook(snapshot, kind));
+      const sheet = workbook.worksheets[0];
+      const headers = (sheet.getRow(1).values as unknown[]).slice(1);
+      return sheet.getRow(3).getCell(headers.indexOf(column) + 1).value;
+    };
+
+    expect(await dependentValue('avon', 'MOBILE_NO')).toBe(enrollment.principal.mobile);
+    expect(await dependentValue('avon', 'EMAIL')).toBe(enrollment.principal.email);
+    expect(await dependentValue('admin', 'MOBILE_NO')).toBe('');
+    expect(await dependentValue('admin', 'EMAIL')).toBe('');
+    expect(await dependentValue('avon', 'MIDDLE_NAME')).toBe('');
+  });
 });
