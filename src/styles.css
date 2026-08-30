@@ -497,3 +497,20 @@ textarea { resize: vertical; }
   .subscriber-access-list article { grid-template-columns: 36px minmax(0, 1fr); }
   .subscriber-access-list__principals, .subscriber-access-list article .button { grid-column: 2; width: 100%; }
 }
+
+.mobile-payment-action { display: none; }
+.admin-payment-subscriber { display: grid; gap: 10px; padding-bottom: 14px; margin-bottom: 14px; border-bottom: 1px solid var(--line); }
+.admin-payment-subscriber > div { display: flex; justify-content: space-between; gap: 12px; color: var(--muted); font-size: 12px; }
+.admin-payment-subscriber > div strong { color: var(--green-900); }
+
+@media (max-width: 620px) {
+  .payments-page { padding-bottom: 76px; }
+  .mobile-payment-action { display: block; position: fixed; left: 12px; right: 12px; bottom: calc(74px + env(safe-area-inset-bottom)); z-index: 24; padding: 8px; background: rgba(255,255,255,.98); border: 1px solid var(--line); border-radius: 7px; box-shadow: 0 8px 24px rgba(18,55,42,.18); }
+  .mobile-payment-action .button { width: 100%; min-height: 48px; }
+  .modal-backdrop { align-items: end; padding: 0; }
+  .modal { width: 100%; max-height: calc(100dvh - 16px); border-radius: 7px 7px 0 0; padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); }
+  .modal__actions { position: sticky; bottom: 0; padding-top: 10px; background: #fff; flex-direction: column; }
+  .modal__actions .button { width: 100%; min-width: 0; }
+  .modal__actions .button--primary { order: -1; }
+  .admin-payment-subscriber > div { flex-direction: column; gap: 3px; }
+}

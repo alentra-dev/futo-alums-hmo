@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { MessageCircle, Search, ShieldAlert, UserCheck, UserPlus, X } from 'lucide-react';
 import { Button, EmptyState, PageHeader, StatusBadge } from '../../components/ui';
+import { demoSnapshot } from '../../data/demo';
 import { whatsappVerificationUrl } from '../../lib/duplicateMatching';
 import { fullName } from '../../lib/format';
 import { isDemoMode, supabase } from '../../lib/supabase';
@@ -10,8 +11,12 @@ function personName(person: Person) {
   return fullName(person);
 }
 
+const demoApplication: AdminSubscriberApplication = {
+  id: 'demo-application', periodId: demoSnapshot.period.id, year: demoSnapshot.period.year, status: 'pending_review', graduationYear: 1996, principal: { ...demoSnapshot.enrollments[0].principal, id: 'demo-applicant', firstName: 'Emeka', surname: 'Nwosu', email: 'emeka.nwosu@example.com', mobile: '08012345678' }, dependents: [], planId: demoSnapshot.plans[0].id, planName: demoSnapshot.plans[0].name, category: 'individual', hospital: '', consentedAt: new Date().toISOString(), duplicateStatus: 'clear', adminNote: null, enrollmentId: null, submittedAt: new Date().toISOString(), createdAt: new Date().toISOString(), accountEmail: 'emeka.nwosu@example.com', candidates: [],
+};
+
 export function AdminApplicationsPage() {
-  const [applications, setApplications] = useState<AdminSubscriberApplication[]>([]);
+  const [applications, setApplications] = useState<AdminSubscriberApplication[]>(isDemoMode ? [demoApplication] : []);
   const [filter, setFilter] = useState('pending_review');
   const [query, setQuery] = useState('');
   const [notes, setNotes] = useState<Record<string, string>>({});
@@ -36,9 +41,13 @@ export function AdminApplicationsPage() {
   }), [applications, filter, query]);
 
   const review = async (application: AdminSubscriberApplication, action: 'approve' | 'request_changes' | 'mark_duplicate') => {
-    if (!supabase || isDemoMode) return;
     if (action === 'approve' && !window.confirm(`Approve ${personName(application.principal)} as a new subscriber?`)) return;
     if (action === 'mark_duplicate' && !window.confirm('Mark this as a duplicate and close the application?')) return;
+    if (isDemoMode) {
+      setApplications((current) => current.map((item) => item.id === application.id ? { ...item, status: action === 'approve' ? 'approved' : action === 'request_changes' ? 'request_changes' : 'rejected', adminNote: notes[item.id]?.trim() || null } : item));
+      return;
+    }
+    if (!supabase) return;
     setBusy(application.id);
     setError('');
     try {

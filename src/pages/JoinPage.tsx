@@ -22,6 +22,15 @@ function planAmount(plan: JoinConfig['plans'][number], category: PlanCategory, p
   return planTotalKobo(planPremium(plan, category), surchargeRates(period));
 }
 
+function demoApplication(email: string, config: JoinConfig): SubscriberApplication {
+  const id = crypto.randomUUID();
+  return {
+    id, periodId: config.period!.id, year: config.period!.year, status: 'draft', graduationYear: 1996,
+    principal: { id: crypto.randomUUID(), memberType: 'Member', surname: '', firstName: '', middleName: '', dateOfBirth: '', gender: 'Female', relation: 'SELF', nationality: 'Nigerian', enrollmentDate: '', address: '', country: 'Nigeria', state: '', town: '', lga: '', mobile: '', email },
+    dependents: [], planId: null, category: 'individual', hospital: '', consentedAt: null, duplicateStatus: 'unchecked', adminNote: null, enrollmentId: null, submittedAt: null, createdAt: new Date().toISOString(),
+  };
+}
+
 export function JoinPage() {
   const { authenticated, snapshot, register, signOut, notice, authError } = useApp();
   const [config, setConfig] = useState<JoinConfig | null>(isDemoMode ? {
@@ -97,7 +106,14 @@ export function JoinPage() {
   };
 
   const createApplication = async () => {
-    if (!supabase || isDemoMode) return;
+    if (isDemoMode) {
+      if (!workspace || !config?.period) return;
+      const application = demoApplication(workspace.email, config);
+      setWorkspace({ ...workspace, applications: [application, ...workspace.applications] });
+      setActiveId(application.id);
+      return;
+    }
+    if (!supabase) return;
     setBusy('create');
     setError('');
     try {
@@ -113,10 +129,18 @@ export function JoinPage() {
   };
 
   const save = async (submit: boolean) => {
-    if (!supabase || !draft) return;
+    if (!draft) return;
     setBusy(submit ? 'submit' : 'save');
     setError('');
     try {
+      if (isDemoMode) {
+        if (!workspace) return;
+        const updated: SubscriberApplication = { ...draft, status: submit ? 'pending_review' : 'draft', consentedAt: submit ? new Date().toISOString() : draft.consentedAt, submittedAt: submit ? new Date().toISOString() : draft.submittedAt };
+        setWorkspace({ ...workspace, applications: workspace.applications.map((application) => application.id === updated.id ? updated : application) });
+        if (!submit) setStep((current) => Math.min(4, current + 1));
+        return;
+      }
+      if (!supabase) return;
       const { data, error: saveError } = await supabase.rpc('save_subscriber_application', {
         p_application_id: draft.id,
         p_payload: {

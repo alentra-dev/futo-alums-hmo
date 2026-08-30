@@ -7,7 +7,7 @@ import { Button, EmptyState, PageHeader, StatusBadge } from '../../components/ui
 interface ProgramMember { userId: string; displayName: string; email: string; role: 'subscriber' | 'admin' | 'owner'; active: boolean }
 
 export function AdminAccessPage() {
-  const [members, setMembers] = useState<ProgramMember[]>(isDemoMode ? [{ userId: 'owner-demo', displayName: 'Program Owner', email: 'owner.com', role: 'owner', active: true }, { userId: 'admin-demo-1', displayName: 'Program Administrator', email: 'admin.one.com', role: 'admin', active: true }, { userId: 'member-demo', displayName: 'Ada Okafor', email: 'ada.okafor.com', role: 'subscriber', active: true }] : []);
+  const [members, setMembers] = useState<ProgramMember[]>(isDemoMode ? [{ userId: 'owner-demo', displayName: 'Program Owner', email: 'owner@example.com', role: 'owner', active: true }, { userId: 'admin-demo-1', displayName: 'Program Administrator', email: 'admin.one@example.com', role: 'admin', active: true }, { userId: 'member-demo', displayName: 'Ada Okafor', email: 'ada.okafor@example.com', role: 'subscriber', active: true }] : []);
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState('');
   const load = async () => { if (!supabase || isDemoMode) return; const { data, error } = await supabase.rpc('get_program_members'); if (error) throw error; setMembers((data ?? []) as ProgramMember[]); };

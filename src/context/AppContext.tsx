@@ -230,8 +230,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         p_reference: input.reference,
         p_proof_path: proofPath,
       });
-      if (error) throw error;
+      if (error) {
+        if (proofPath) await supabase.storage.from('payment-proofs').remove([proofPath]);
+        throw error;
+      }
       await loadLiveSnapshot();
+      setNotice('Payment confirmation uploaded for administrator review.');
       return;
     }
     const enrollment = snapshot?.enrollments.find((item) => item.id === input.enrollmentId);
@@ -247,7 +251,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       submittedAt: new Date().toISOString(),
     };
     mutateDemo((current) => ({ ...current, payments: [payment, ...current.payments] }));
-    setNotice('Payment submitted for administrator verification.');
+    setNotice('Payment confirmation uploaded for administrator review.');
   };
 
   const reviewPayment = async (paymentId: string, status: Exclude<PaymentStatus, 'pending'>) => {

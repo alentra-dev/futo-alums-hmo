@@ -24,7 +24,7 @@ export function DashboardPage() {
   const copyAccount = () => void navigator.clipboard.writeText(paymentAccount.accountNumber);
 
   return <>
-    <PageHeader eyebrow={`${period.year} enrollment`} title={`Welcome, ${enrollment.principal.firstName}`} description={`Enrollment closes ${formatDate(period.endsAt, snapshot!.program.timezone)}.`} actions={canNotifyPayment ? <Button icon={<Banknote size={18} />} onClick={() => location.assign(import.meta.env.BASE_URL + 'payments')}>Notify payment</Button> : <Button icon={<ClipboardCheck size={18} />} onClick={() => location.assign(import.meta.env.BASE_URL + 'enrollment')}>Continue enrollment</Button>} />
+    <PageHeader eyebrow={`${period.year} enrollment`} title={`Welcome, ${enrollment.principal.firstName}`} description={`Enrollment closes ${formatDate(period.endsAt, snapshot!.program.timezone)}.`} actions={canNotifyPayment ? <Button icon={<Banknote size={18} />} onClick={() => location.assign(import.meta.env.BASE_URL + 'payments')}>Upload payment confirmation</Button> : <Button icon={<ClipboardCheck size={18} />} onClick={() => location.assign(import.meta.env.BASE_URL + 'enrollment')}>Continue enrollment</Button>} />
 
     <section className="metric-grid">
       <article className="metric metric--accent"><span className="metric__icon"><HeartPulse size={21} /></span><div><small>Selected plan</small><strong>{selectedPlan?.name ?? 'Not selected'}</strong><span>{enrollment.category === 'family' ? `${enrollment.dependents.length + 1} covered people` : 'Individual cover'}</span></div></article>
@@ -58,8 +58,8 @@ export function DashboardPage() {
 
     <section className="next-step-band">
       <ClipboardCheck size={24} />
-      <div><strong>{canNotifyPayment ? 'Your enrollment details are complete.' : 'Finish your enrollment.'}</strong><span>{canNotifyPayment ? 'You can update them until administrators close the enrollment period.' : 'Review your plan and household details, provide consent, and submit your enrollment.'}</span></div>
-      <Link to="/enrollment">{canNotifyPayment ? 'Review enrollment' : 'Continue enrollment'} <ArrowRight size={18} /></Link>
+      <div><strong>{canNotifyPayment ? 'Upload your payment confirmation.' : 'Finish your enrollment.'}</strong><span>{canNotifyPayment ? 'After each transfer, upload its confirmation so administrators can verify your payment.' : 'Review your plan and household details, provide consent, and submit your enrollment.'}</span></div>
+      <Link to={canNotifyPayment ? '/payments' : '/enrollment'}>{canNotifyPayment ? 'Upload confirmation' : 'Continue enrollment'} <ArrowRight size={18} /></Link>
     </section>
   </>;
 }

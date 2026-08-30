@@ -10,3 +10,5 @@ test-results/
 *.log
 *.tsbuildinfo
 .DS_Store
+
+.artifacts/

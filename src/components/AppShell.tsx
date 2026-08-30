@@ -1,20 +1,23 @@
 import { useMemo, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Activity, Banknote, ChartNoAxesColumn, ClipboardCheck, FileClock, HeartPulse, KeyRound, LayoutDashboard, LogOut, Menu, Settings, ShieldCheck, UserPlus, Users, X } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import { Activity, ChartNoAxesColumn, ClipboardCheck, FileClock, FileUp, HeartPulse, KeyRound, LayoutDashboard, LogOut, Menu, Settings, ShieldCheck, UserPlus, Users, X } from 'lucide-react';
 import clsx from 'clsx';
 import { useApp } from '../context/AppContext';
 import { initials } from '../lib/format';
 import { IconButton } from './ui';
 
-const subscriberNav = [
+type NavigationItem = { to: string; label: string; mobileLabel?: string; icon: LucideIcon };
+
+const subscriberNav: NavigationItem[] = [
   { to: '/account', label: 'Overview', icon: LayoutDashboard },
   { to: '/enrollment', label: 'Enrollment', icon: ClipboardCheck },
   { to: '/plans', label: 'Plans', icon: HeartPulse },
-  { to: '/payments', label: 'Payments', icon: Banknote },
+  { to: '/payments', label: 'Upload payment', mobileLabel: 'Upload proof', icon: FileUp },
   { to: '/history', label: 'History', icon: FileClock },
 ];
 
-const adminNav = [
+const adminNav: NavigationItem[] = [
   { to: '/admin', label: 'Admin overview', icon: Activity },
   { to: '/admin/applications', label: 'New subscribers', icon: UserPlus },
   { to: '/admin/enrollees', label: 'Enrollees', icon: Users },
@@ -79,7 +82,7 @@ export function AppShell() {
       {notice && <div className="toast" role="status"><span>{notice}</span><IconButton label="Dismiss" onClick={dismissNotice}><X size={18} /></IconButton></div>}
       <main className="page-content"><Outlet /></main>
       <nav className="mobile-nav" aria-label="Mobile navigation">
-        {nav.slice(0, 4).map(({ to, label, icon: Icon }) => <NavLink key={to} to={to} end={to === '/' || to === '/admin'}><Icon size={20} /><span>{label.replace('Admin ', '')}</span></NavLink>)}
+        {nav.slice(0, 4).map(({ to, label, mobileLabel, icon: Icon }) => <NavLink key={to} to={to} end={to === '/' || to === '/admin'}><Icon size={20} /><span>{mobileLabel ?? label.replace('Admin ', '')}</span></NavLink>)}
       </nav>
     </div>
   </div>;
