@@ -199,6 +199,12 @@ As of 2026-09-15:
 - the required hospital preference was transferred to the renewing enrollee;
 - an independent read-only query verified the period, rates, payments, enrollment statuses, assessment assignments, spouse link, duplicate resolution, and hospital transfer after application.
 
+On 2026-09-16 the 2026 roster was pruned to actual enrollees. The annual rollover creates a `draft` enrollment for every household carried forward, so the period also held seven rollover drafts for alumni who did not return for 2026. Each was verified inert before removal: `draft` status, zero payment records of any status, no consent, no submission, no assessment assignment, and six of the seven with no plan selected. Seven enrollments and twenty-one `enrollment_people` snapshots were deleted.
+
+The 2026 period now holds exactly six `closed` enrollments. Verified HMO collections still total ₦1,577,991.18, all six assessment assignments are intact, and there are no orphaned payment or person-snapshot rows. Every affected household keeps its 2025 enrollment and its household-scoped `people` records; twelve 2025 enrollments remain. The deletions are recorded as seven `enrollments.delete` audit events carrying full `old_data`, so the rows are reconstructible from the audit log.
+
+Removal ran from ignored `.private/remove-2026-unenrolled.ts`, which previews by default, re-derives its target set at apply time, re-asserts every safety condition immediately before deleting, and aborts if the count changes or any matching record shows engagement.
+
 The production reconciliation is intentionally stored only in ignored `.private/reconcile-2026.ts` because it contains real subscriber mappings and financial details. It is retained for audit/recovery context and must never be moved into tracked code, documentation, tests, issues, or commit messages.
 
 ## 9. Reporting and exports
@@ -376,6 +382,7 @@ Keep `docs/ADMIN_CHEATSHEET.md` aligned whenever an administrator workflow or la
 - Continue provider-template regression tests whenever AVON changes its workbook fields or plan definitions.
 - Consider further bundle splitting for ExcelJS and charting if mobile load performance becomes a problem.
 - Before a new annual rollover, verify dates, offerings, rates, payment account, assessment status, hospital guidance, email copy, redirect URLs, SMTP, and exports in a non-production or dry-run path.
+- Annual rollover creates a `draft` enrollment for every carried-forward household, including alumni who never return. Those drafts inflate the enrollee list, the administrator principal-member count, and the summary and admin-full exports until pruned. Plan to reconcile the roster after each enrollment period closes, and never prune on payment alone: check for pending payments, consent, and submission first, because an enrollment can be genuine and unpaid.
 - `.env.local` on a developer machine may hold production Supabase credentials, with `VITE_DEMO_MODE=true` as the only thing preventing `npm run dev` from operating on live data. Prefer a separate non-production project for local work, and confirm demo mode before exercising any mutation locally.
 - `relation` is free text for principals and dependents. AVON submissions and the family-composition rule (spouse plus up to four children under 21) would both benefit from a constrained vocabulary; dependent ages and relationships are currently unvalidated.
 - `paymentPosition` reports `underpaid`, `paid in full`, and `overpaid`. §7.1 also describes an `unpaid` state for enrollments with no verified payment; it is currently reported as `underpaid`. Splitting it would change exported values, so it needs a deliberate decision.
