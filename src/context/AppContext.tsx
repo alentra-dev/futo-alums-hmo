@@ -6,7 +6,7 @@ import { fullName } from '../lib/format';
 import { planTotalKobo, type SurchargeRates } from '../lib/money';
 import { isDemoMode, supabase } from '../lib/supabase';
 import { loadSurchargeRates, surchargeRates, withSurchargeRates } from '../lib/surchargeRates';
-import type { Enrollment, EnrollmentPeriod, Payment, PaymentAccount, PaymentInput, PaymentStatus, PlanCategory, ProgramSnapshot, Role } from '../lib/types';
+import type { AssessmentAdjustment, Enrollment, EnrollmentPeriod, FinancialAssessment, Payment, PaymentAccount, PaymentInput, PaymentStatus, PlanCategory, ProgramSnapshot, Role } from '../lib/types';
 
 interface AppContextValue {
   snapshot: ProgramSnapshot | null;
@@ -38,6 +38,26 @@ function mapSnapshot(payload: unknown): ProgramSnapshot {
   return payload as ProgramSnapshot;
 }
 
+interface FinancialWorkspacePayload {
+  assessments: FinancialAssessment[];
+  assessmentAdjustments: AssessmentAdjustment[];
+  paymentLinks: { paymentId: string; assessmentId: string }[];
+}
+
+export async function loadFinancialWorkspace(snapshot: ProgramSnapshot) {
+  if (!supabase) return snapshot;
+  const { data, error } = await supabase.rpc('get_financial_workspace', { p_period_id: snapshot.period.id });
+  if (error) throw error;
+  const financial = data as FinancialWorkspacePayload;
+  const links = new Map((financial.paymentLinks ?? []).map((item) => [item.paymentId, item.assessmentId]));
+  return {
+    ...snapshot,
+    assessments: financial.assessments ?? [],
+    assessmentAdjustments: financial.assessmentAdjustments ?? [],
+    payments: snapshot.payments.map((payment) => ({ ...payment, assessmentId: links.get(payment.id) ?? null })),
+  };
+}
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const initialUrl = useRef(new URL(window.location.href));
   const authCallbackPending = useRef(!isDemoMode && hasAuthCallback(initialUrl.current));
@@ -60,7 +80,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (error.message !== 'No active program membership') setNotice(error.message);
       setSnapshot(null);
     } else {
-      const mapped = mapSnapshot(snapshotResult.data);
+      const mapped = await loadFinancialWorkspace(mapSnapshot(snapshotResult.data));
       try {
         const rates = await loadSurchargeRates(mapped.period.id);
         setNotice(null);
@@ -223,12 +243,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const { error: uploadError } = await supabase.storage.from('payment-proofs').upload(proofPath, input.proof, { upsert: false });
         if (uploadError) throw uploadError;
       }
-      const { error } = await supabase.rpc('submit_payment', {
+      const { error } = await supabase.rpc(input.assessmentId ? 'submit_assessment_payment' : 'submit_payment', {
         p_enrollment_id: input.enrollmentId,
         p_amount_kobo: input.amountKobo,
         p_paid_at: input.paidAt,
         p_reference: input.reference,
         p_proof_path: proofPath,
+        ...(input.assessmentId ? { p_assessment_id: input.assessmentId } : {}),
       });
       if (error) {
         if (proofPath) await supabase.storage.from('payment-proofs').remove([proofPath]);
@@ -248,6 +269,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       reference: input.reference,
       proofName: input.proof?.name ?? 'payment-proof.pdf',
       status: 'pending',
+      assessmentId: input.assessmentId ?? null,
       submittedAt: new Date().toISOString(),
     };
     mutateDemo((current) => ({ ...current, payments: [payment, ...current.payments] }));

@@ -26,17 +26,21 @@ async function capture(page: Page, testInfo: TestInfo, name: string) {
 
 test('existing subscriber can find and submit multiple payment confirmations', async ({ page, isMobile }, testInfo) => {
   await useSubscriberWorkspace(page);
-  await expect(page.getByRole('button', { name: 'Upload payment confirmation' })).toBeVisible();
-  await expect(page.getByText('Upload your payment confirmation.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Pay CAC assessment' })).toBeVisible();
+  await expect(page.getByText(/CAC payment due/)).toBeVisible();
 
   await page.getByRole('link', { name: isMobile ? 'Upload proof' : 'Upload payment' }).click();
   await expect(page.getByRole('heading', { name: 'Payments and confirmations' })).toBeVisible();
   if (isMobile) await expect(page.locator('.mobile-payment-action')).toBeVisible();
+  await expect(page.locator('.amount-due').getByRole('button', { name: 'Upload HMO payment' })).toBeVisible();
+  await expect(page.locator('.assessment-panel').getByRole('button', { name: 'Upload CAC payment' })).toBeVisible();
 
-  const upload = async (amount: string, fileName: string) => {
-    const trigger = isMobile ? page.locator('.mobile-payment-action').getByRole('button') : page.getByRole('button', { name: 'Upload payment confirmation' });
+  const upload = async (purpose: 'HMO' | 'CAC', amount: string, fileName: string) => {
+    const trigger = purpose === 'CAC'
+      ? page.locator('.assessment-panel').getByRole('button', { name: 'Upload CAC payment' })
+      : page.locator('.amount-due').getByRole('button', { name: 'Upload HMO payment' });
     await trigger.click();
-    await expect(page.getByRole('heading', { name: 'Upload payment confirmation' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: purpose === 'CAC' ? 'Pay CAC registration contribution' : 'Upload HMO payment confirmation' })).toBeVisible();
     if (fileName === 'first-confirmation.png') { await assertViewportIntegrity(page); await capture(page, testInfo, 'subscriber-upload-modal'); }
     await page.getByLabel('Amount shown on confirmation (₦)').fill(amount);
     await page.locator('input[name="proof"]').setInputFiles({ ...confirmation, name: fileName });
@@ -45,9 +49,9 @@ test('existing subscriber can find and submit multiple payment confirmations', a
     await expect(page.getByText(fileName)).toBeVisible();
   };
 
-  await upload('42345.67', 'first-confirmation.png');
+  await upload('CAC', '33000', 'first-confirmation.png');
   await page.getByLabel('Dismiss').click();
-  await upload('10000', 'second-confirmation.png');
+  await upload('HMO', '10000', 'second-confirmation.png');
   await expect(page.getByText('4 confirmations')).toBeVisible();
   await assertViewportIntegrity(page);
   await capture(page, testInfo, 'subscriber-payments');
@@ -62,16 +66,14 @@ test('existing subscriber can reach enrollment, plans, history, and account acti
   await page.getByRole('button', { name: 'View benefits' }).first().click();
   await expect(page.getByRole('dialog')).toBeVisible();
   await page.getByRole('dialog').locator('.modal__actions').getByRole('button', { name: 'Close' }).click();
-  await page.locator('.plan-card').first().getByRole('button', { name: 'Select plan' }).click();
-  await expect(page.getByText('Plan selection updated.')).toBeVisible();
-  await page.getByLabel('Dismiss').click();
+  await expect(page.getByText('The enrollment period is closed. Plan offerings remain available for reference.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Enrollment closed' }).first()).toBeDisabled();
 
   await navigate('Enrollment');
   await expect(page.getByRole('heading', { name: 'Confirm who is covered' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Submit enrollment' })).toBeVisible();
-  await page.getByLabel('Preferred hospital (optional)').fill('Rivers State University Teaching Hospital');
-  await page.getByRole('button', { name: 'Save progress' }).click();
-  await expect(page.getByText('Enrollment details saved.')).toBeVisible();
+  await expect(page.getByText('This enrollment period is closed. Details remain available as read-only records.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Enrollment closed' })).toBeDisabled();
+  await expect(page.getByLabel('Preferred hospital (optional)')).toBeDisabled();
 
   if (isMobile) {
     await page.getByLabel('Open navigation').click();
@@ -161,8 +163,8 @@ test('administrator can access and operate administration tools', async ({ page,
   await page.locator('#timezone select').selectOption('Africa/Lagos');
   await page.getByRole('button', { name: 'Save time zone' }).click();
   await expect(page.getByText('Program time zone updated.')).toBeVisible();
-  await page.getByLabel('Bank', { exact: true }).fill('Test Bank');
-  await page.getByRole('button', { name: 'Save payment account' }).click();
+  await page.locator('#payment-account').getByLabel('Bank', { exact: true }).fill('Test Bank');
+  await page.getByRole('button', { name: 'Save HMO payment account' }).click();
   await expect(page.getByText('Payment account updated.')).toBeVisible();
   page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: 'Save surcharge rates' }).click();

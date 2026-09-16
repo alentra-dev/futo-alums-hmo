@@ -1,6 +1,6 @@
 export const KOBO_PER_NAIRA = 100;
 export const NHIS_FEE_BASIS_POINTS = 100;
-export const PROGRAM_FEE_BASIS_POINTS = 1500;
+export const PROGRAM_FEE_BASIS_POINTS = 200;
 
 export interface SurchargeRates {
   nhisFeeBasisPoints: number;
@@ -48,4 +48,23 @@ export function planTotalKobo(premiumKobo: number, rates: SurchargeRates = DEFAU
 
 export function formatBasisPoints(basisPoints: number) {
   return new Intl.NumberFormat('en-NG', { maximumFractionDigits: 2 }).format(basisPoints / 100);
+}
+
+export type PaymentPositionStatus = 'underpaid' | 'paid in full' | 'overpaid';
+
+export interface PaymentPosition {
+  status: PaymentPositionStatus;
+  differenceKobo: number;
+  underpaymentKobo: number;
+  overpaymentKobo: number;
+}
+
+export function paymentPosition(totalKobo: number, verifiedKobo: number): PaymentPosition {
+  const differenceKobo = verifiedKobo - totalKobo;
+  return {
+    status: differenceKobo < 0 ? 'underpaid' : differenceKobo > 0 ? 'overpaid' : 'paid in full',
+    differenceKobo,
+    underpaymentKobo: Math.max(0, -differenceKobo),
+    overpaymentKobo: Math.max(0, differenceKobo),
+  };
 }

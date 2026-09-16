@@ -72,6 +72,7 @@ export interface Payment {
   proofName: string;
   status: PaymentStatus;
   submittedAt: string;
+  assessmentId: string | null;
 }
 
 export interface PaymentAccount {
@@ -79,6 +80,27 @@ export interface PaymentAccount {
   bank: string;
   accountNumber: string;
   referencePrefix: string;
+}
+
+export interface FinancialAssessment {
+  id: string;
+  periodId: string;
+  name: string;
+  description: string;
+  amountKobo: number;
+  feePortionKobo: number;
+  futureCreditKobo: number;
+  creditYear: number;
+  dueAt: string;
+  active: boolean;
+  paymentAccount: PaymentAccount;
+}
+
+export interface AssessmentAdjustment {
+  assessmentId: string;
+  enrollmentId: string;
+  adjustmentKobo: number;
+  note: string;
 }
 
 export interface EnrollmentPeriod {
@@ -116,6 +138,8 @@ export interface ProgramSnapshot {
   enrollments: Enrollment[];
   payments: Payment[];
   paymentAccount: PaymentAccount;
+  assessments: FinancialAssessment[];
+  assessmentAdjustments: AssessmentAdjustment[];
   auditEvents: AuditEvent[];
   hospitalSuggestions: string[];
 }
@@ -124,11 +148,12 @@ export interface PaymentInput {
   enrollmentId: string;
   amountKobo: number;
   paidAt: string;
+  assessmentId?: string;
   reference: string;
   proof?: File;
 }
 
-export type EnrollmentPeriodSnapshot = Pick<ProgramSnapshot, 'period' | 'plans' | 'enrollments' | 'payments'>;
+export type EnrollmentPeriodSnapshot = Pick<ProgramSnapshot, 'period' | 'plans' | 'enrollments' | 'payments' | 'assessments' | 'assessmentAdjustments'>;
 export type SubscriberApplicationStatus = 'draft' | 'pending_review' | 'request_changes' | 'approved' | 'rejected';
 export type DuplicateReviewStatus = 'unchecked' | 'clear' | 'review_required' | 'resolved' | 'confirmed_duplicate';
 

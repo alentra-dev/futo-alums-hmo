@@ -11,8 +11,8 @@ export function AdminDashboardPage() {
   const { snapshot } = useApp();
   const { enrollments, payments, plans, period } = snapshot!;
   const submitted = enrollments.filter((item) => item.status === 'submitted').length;
-  const verified = payments.filter((item) => item.status === 'verified').reduce((sum, item) => sum + item.amountKobo, 0);
-  const pending = payments.filter((item) => item.status === 'pending');
+  const verified = payments.filter((item) => item.status === 'verified' && !item.assessmentId).reduce((sum, item) => sum + item.amountKobo, 0);
+  const pending = payments.filter((item) => item.status === 'pending' && !item.assessmentId);
   const expected = enrollments.reduce((sum, item) => sum + item.totalKobo, 0);
   const chartData = plans.map((plan) => ({ name: plan.name.replace(' Plan', ''), members: enrollments.filter((item) => item.planId === plan.id).length })).filter((item) => item.members > 0);
 
@@ -21,7 +21,7 @@ export function AdminDashboardPage() {
     <section className="metric-grid admin-metrics">
       <article className="metric metric--accent"><span className="metric__icon"><Users size={21} /></span><div><small>Principal members</small><strong>{enrollments.length}</strong><span>{enrollments.reduce((sum, item) => sum + item.dependents.length, 0)} dependents</span></div></article>
       <article className="metric"><span className="metric__icon"><CheckCircle2 size={21} /></span><div><small>Submitted</small><strong>{submitted}</strong><span>{enrollments.length - submitted} need attention</span></div></article>
-      <article className="metric"><span className="metric__icon"><Banknote size={21} /></span><div><small>Verified collections</small><strong>{formatNaira(verified)}</strong><span>of {formatNaira(expected)} expected</span></div></article>
+      <article className="metric"><span className="metric__icon"><Banknote size={21} /></span><div><small>Verified HMO collections</small><strong>{formatNaira(verified)}</strong><span>of {formatNaira(expected)} expected</span></div></article>
       <article className="metric"><span className="metric__icon"><CalendarClock size={21} /></span><div><small>Pending review</small><strong>{pending.length}</strong><span>{formatNaira(pending.reduce((sum, item) => sum + item.amountKobo, 0))}</span></div></article>
     </section>
     <section className="admin-dashboard-grid">

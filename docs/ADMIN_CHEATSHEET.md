@@ -19,11 +19,11 @@ Use **Admin workspace** in the left navigation after signing in. Subscriber heal
 | **Overview** | Current-year enrollment totals, collections, plan distribution, deadline, and pending-payment shortcuts |
 | **New subscribers** | Review applicants, investigate possible duplicates, request corrections, approve, or mark duplicates |
 | **Enrollees** | Search enrollment records, change reporting year, review status, and download reports or exports |
-| **Payment review** | Open payment evidence and verify or reject each notification |
+| **Payment review** | Open evidence, distinguish HMO/assessment payments, verify or reject notifications, or upload for a subscriber |
 | **Portal activity** | Review daily unique sign-ins and distinguish subscriber-linked, applicant, and admin-only activity |
 | **Subscriber access** | Change the email used to sign in without changing AVON enrollment email history |
 | **Audit history** | Trace who changed what and when |
-| **Program settings** | Manage time zone, fees, enrollment dates/status, annual rollover, and payment account |
+| **Program settings** | Manage time zone, HMO fees, program assessments, enrollment dates/status, annual rollover, and payment accounts |
 | **Administrator access** | Owner-only control for adding or removing administrators |
 
 ## New subscriber review
@@ -43,11 +43,11 @@ Do not approve an application merely because the name looks familiar. Resolve ev
 
 1. Select the **Enrollment year** before reviewing or downloading anything.
 2. Search by member name or email, or filter by enrollment status.
-3. Confirm the member's plan, **Individual/Family** type, household size, total, hospital, and status.
+3. Confirm the member's plan, **Individual/Family** type, household size, HMO total, exact under/overpayment, assessment balance, hospital, and status.
 4. Download the appropriate workbook:
-   - **Summary**: principal member, plan, category, amount owed, verified paid, pending, outstanding, and status.
-   - **Admin full export**: complete enrollment fields plus the internal **FUTO HMO FULL PAYMNT** field.
-   - **AVON export**: AVON-ready fields; excludes the internal payment field and includes only submitted or closed enrollments.
+   - **Summary**: principal member, plan/category, HMO payable/verified/position, assessment paid/due, future credit, and status.
+   - **Admin full export**: complete enrollment fields plus internal HMO and assessment accounting fields.
+   - **AVON export**: AVON-ready fields only; excludes payment, assessment, and other internal administration fields and includes only submitted or closed enrollments.
 
 Important:
 
@@ -70,7 +70,7 @@ Important:
 For every pending payment:
 
 1. Select **View proof**.
-2. Match the subscriber, amount, payment date, transfer reference, beneficiary account, and bank transaction.
+2. Confirm whether it is an **HMO premium** or **program assessment**, then match the subscriber, amount, payment date, transfer reference, correct beneficiary account, and bank transaction.
 3. Check the custodian's bank record independently.
 4. Select:
    - **Verify** only when the bank record and uploaded evidence agree.
@@ -79,10 +79,21 @@ For every pending payment:
 Guidance:
 
 - Each partial payment appears separately and must be reviewed separately.
+- Subscribers may upload more than two confirmations; there is no fixed payment-count limit.
 - A proof link is temporary; reopen **View proof** if it expires.
 - Pending payments do not count as verified collections.
 - Never verify solely from a screenshot without confirming receipt in the program account.
 - If the subscriber selected no plan or remains in draft, ask them to finish and submit enrollment even if payment has already been made.
+
+### Upload for a subscriber
+
+Use **Upload for subscriber** only when support is necessary:
+
+1. Select the subscriber and payment purpose: HMO premium or the named assessment.
+2. Enter the exact amount and payment date, add the transfer reference, and attach the evidence supplied by the subscriber.
+3. Upload it for review, then verify it only after independently confirming receipt in the matching account.
+
+The upload is still a separate audit and review event. Do not combine multiple transfers into one record.
 
 ## Subscriber account access
 
@@ -136,6 +147,14 @@ The current charges are configured independently:
 
 Saving rates immediately recalculates totals and outstanding balances for that year. Existing payment records are preserved. Confirm the approved rates before saving.
 
+The finalized 2026 HMO fee model is 1% AVON NHIS plus 2% program administration. A separate CAC/program assessment is not an HMO percentage fee.
+
+### Program assessment
+
+Use this section for a distinct non-premium contribution such as CAC/entity-registration costs. Configure its name, description, base amount, retained fee portion, future-enrollment credit, credit year, due date, active state, and dedicated payment account.
+
+Use **Enrollees** to include or exclude a subscriber and to enter a signed adjustment with a clear note. The displayed net amount combines the assessment base, exact HMO under/overpayment, any administrator adjustment, and verified assessment payments. Do not use an adjustment to hide a payment; record every transfer as a payment confirmation.
+
 ### Enrollment period
 
 - **Scheduled**: configured but not open.
@@ -148,9 +167,9 @@ Administrators may adjust opening and closing dates and add an extension or clos
 
 **Create next enrollment year** copies the current offerings and subscriber households into the next year as the starting point. Before opening the new year, verify the dates, fees, prices, benefits, active plans, and payment account against the new provider proposal.
 
-### Payment account
+### HMO payment account
 
-Confirm the account name, bank, 10-digit account number, and transfer-reference prefix before saving. Changes become visible to subscribers.
+Confirm the account name, bank, 10-digit account number, and transfer-reference prefix before saving. This account is for HMO premiums. An active program assessment can have a different account, so verify which purpose a subscriber selected before reviewing evidence.
 
 ## Administrator access
 
@@ -167,7 +186,7 @@ Give admin access only to people actively performing program administration. Rem
 1. Resolve every pending new-subscriber application.
 2. Follow up on draft enrollments and missing plans.
 3. Review all pending payment evidence.
-4. Reconcile verified collections against the bank account.
+4. Reconcile HMO and assessment collections separately against their respective bank accounts.
 5. Download and review the selected year's **Summary** and **Admin full export**.
 6. Confirm all AVON-bound records are submitted and complete.
 7. Close the enrollment period in **Program settings**.

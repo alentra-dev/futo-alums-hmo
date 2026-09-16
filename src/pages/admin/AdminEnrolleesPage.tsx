@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Download, FileSpreadsheet, Search, Users } from 'lucide-react';
-import { Button, EmptyState, PageHeader, StatusBadge } from '../../components/ui';
-import { useApp } from '../../context/AppContext';
+import { Download, FileSpreadsheet, Search, SlidersHorizontal, Users } from 'lucide-react';
+import { Button, EmptyState, Modal, PageHeader, StatusBadge } from '../../components/ui';
+import { loadFinancialWorkspace, useApp } from '../../context/AppContext';
 import { defaultAdminPeriod } from '../../lib/enrollmentPeriods';
 import { downloadAdminFullWorkbook, downloadAvonWorkbook, downloadSummaryWorkbook } from '../../lib/export';
 import { fullName } from '../../lib/format';
-import { formatNaira } from '../../lib/money';
+import { assessmentForEnrollment, enrollmentFinancialPosition } from '../../lib/financialPosition';
+import { formatNaira, nairaToKobo } from '../../lib/money';
 import { isDemoMode, supabase } from '../../lib/supabase';
 import { loadSurchargeRates, withSurchargeRates } from '../../lib/surchargeRates';
-import type { EnrollmentPeriod, EnrollmentPeriodSnapshot, ProgramSnapshot } from '../../lib/types';
+import type { Enrollment, EnrollmentPeriod, EnrollmentPeriodSnapshot, ProgramSnapshot } from '../../lib/types';
 
 export function AdminEnrolleesPage() {
   const { snapshot } = useApp();
@@ -21,11 +22,19 @@ export function AdminEnrolleesPage() {
     plans: snapshot!.plans,
     enrollments: snapshot!.enrollments,
     payments: snapshot!.payments,
+    assessments: snapshot!.assessments,
+    assessmentAdjustments: snapshot!.assessmentAdjustments,
   });
   const [loadingPeriod, setLoadingPeriod] = useState(false);
   const [periodError, setPeriodError] = useState('');
+  const [selectedEnrollment, setSelectedEnrollment] = useState<Enrollment | null>(null);
+  const [included, setIncluded] = useState(false);
+  const [adjustment, setAdjustment] = useState('0');
+  const [adjustmentNote, setAdjustmentNote] = useState('');
+  const [savingAdjustment, setSavingAdjustment] = useState(false);
 
   useEffect(() => {
+
     if (isDemoMode || !supabase) return;
     let active = true;
     void supabase.rpc('get_admin_enrollment_periods').then(({ data, error }) => {
@@ -60,7 +69,8 @@ export function AdminEnrolleesPage() {
         try {
           const next = data as EnrollmentPeriodSnapshot;
           const rates = await loadSurchargeRates(next.period.id);
-          if (active) setPeriodData({ ...next, period: withSurchargeRates(next.period, rates) });
+          const financial = await loadFinancialWorkspace({ ...snapshot!, ...next } as ProgramSnapshot);
+          if (active) setPeriodData({ ...next, payments: financial.payments, assessments: financial.assessments, assessmentAdjustments: financial.assessmentAdjustments, period: withSurchargeRates(next.period, rates) });
         } catch (reason) {
           if (active) setPeriodError(reason instanceof Error ? reason.message : 'Unable to load enrollment year.');
         }
@@ -68,7 +78,7 @@ export function AdminEnrolleesPage() {
       setLoadingPeriod(false);
     });
     return () => { active = false; };
-  }, [selectedPeriodId]);
+  }, [selectedPeriodId, snapshot]);
 
   const reportSnapshot = useMemo(() => ({ ...snapshot!, ...periodData }) as ProgramSnapshot, [snapshot, periodData]);
   const rows = useMemo(() => periodData.enrollments.filter((item) => {
@@ -82,6 +92,43 @@ export function AdminEnrolleesPage() {
     setSelectedPeriodId(periodId);
   };
 
+
+  const activeAssessment = periodData.assessments.find((item) => item.active);
+  const openFinancialAdjustment = (enrollment: Enrollment) => {
+    const current = activeAssessment ? periodData.assessmentAdjustments.find((item) => item.assessmentId === activeAssessment.id && item.enrollmentId === enrollment.id) : undefined;
+    setSelectedEnrollment(enrollment);
+    setIncluded(Boolean(current));
+    setAdjustment(String((current?.adjustmentKobo ?? 0) / 100));
+    setAdjustmentNote(current?.note ?? '');
+  };
+  const saveFinancialAdjustment = async () => {
+    if (!activeAssessment || !selectedEnrollment) return;
+    const adjustmentKobo = nairaToKobo(adjustment);
+    setSavingAdjustment(true);
+    try {
+      if (!isDemoMode && supabase) {
+        const { error } = await supabase.rpc('set_enrollment_assessment', {
+          p_assessment_id: activeAssessment.id,
+          p_enrollment_id: selectedEnrollment.id,
+          p_included: included,
+          p_adjustment_kobo: adjustmentKobo,
+          p_note: adjustmentNote,
+        });
+        if (error) throw error;
+      }
+      setPeriodData((current) => ({
+        ...current,
+        assessmentAdjustments: included
+          ? [...current.assessmentAdjustments.filter((item) => item.assessmentId !== activeAssessment.id || item.enrollmentId !== selectedEnrollment.id), { assessmentId: activeAssessment.id, enrollmentId: selectedEnrollment.id, adjustmentKobo, note: adjustmentNote }]
+          : current.assessmentAdjustments.filter((item) => item.assessmentId !== activeAssessment.id || item.enrollmentId !== selectedEnrollment.id),
+      }));
+      setSelectedEnrollment(null);
+    } catch (reason) {
+      setPeriodError(reason instanceof Error ? reason.message : 'Unable to update subscriber assessment.');
+    } finally {
+      setSavingAdjustment(false);
+    }
+  };
   const actions = <div className="button-row">
     <Button variant="secondary" disabled={loadingPeriod} icon={<Download size={18} />} onClick={() => void downloadSummaryWorkbook(reportSnapshot)}>Summary</Button>
     <Button variant="secondary" disabled={loadingPeriod} icon={<FileSpreadsheet size={18} />} onClick={() => void downloadAdminFullWorkbook(reportSnapshot)}>Admin full export</Button>
@@ -97,6 +144,30 @@ export function AdminEnrolleesPage() {
       <span>{loadingPeriod ? 'Loading...' : `${rows.length} records`}</span>
     </div>
     {periodError && <p className="form-error" role="alert">{periodError}</p>}
-    {!loadingPeriod && (rows.length ? <div className="data-table admin-table"><div className="data-table__head"><span>Member</span><span>Plan</span><span>Plan type</span><span>Household</span><span>Total payable</span><span>Hospital</span><span>Status</span></div>{rows.map((enrollment) => <div className="data-table__row" key={enrollment.id}><span data-label="Member"><strong>{fullName(enrollment.principal)}</strong><small>{enrollment.principal.email}</small></span><span data-label="Plan">{periodData.plans.find((plan) => plan.id === enrollment.planId)?.name ?? 'Not selected'}</span><span data-label="Plan type">{enrollment.category === 'family' ? 'Family' : 'Individual'}</span><span data-label="Household">{enrollment.dependents.length + 1}</span><strong data-label="Total payable">{formatNaira(enrollment.totalKobo)}</strong><span data-label="Hospital">{enrollment.hospital || 'Not provided'}</span><span data-label="Status"><StatusBadge status={enrollment.status} /></span></div>)}</div> : <EmptyState icon={<Users size={29} />} title="No matching enrollees" body="Adjust the enrollment year, search, or status filter." />)}
+    {!loadingPeriod && (rows.length ? <div className="data-table admin-table"><div className="data-table__head"><span>Member</span><span>Plan</span><span>Plan type</span><span>Total payable</span><span>Verified paid</span><span>HMO position</span><span>CAC net due</span><span>Enrollment</span><span>Manage</span></div>{rows.map((enrollment) => {
+      const assigned = assessmentForEnrollment(enrollment.id, periodData.assessments, periodData.assessmentAdjustments);
+      const financial = enrollmentFinancialPosition(enrollment, periodData.payments, assigned.assessment, assigned.adjustment);
+      const variance = financial.premium.status === 'overpaid' ? financial.premium.overpaymentKobo : financial.premium.underpaymentKobo;
+      return <div className="data-table__row" key={enrollment.id}>
+        <span data-label="Member"><strong>{fullName(enrollment.principal)}</strong><small>{enrollment.principal.email}</small></span>
+        <span data-label="Plan">{periodData.plans.find((plan) => plan.id === enrollment.planId)?.name ?? 'Not selected'}</span>
+        <span data-label="Plan type">{enrollment.category === 'family' ? 'Family' : 'Individual'}</span>
+        <strong data-label="Total payable">{formatNaira(enrollment.totalKobo)}</strong>
+        <strong data-label="Verified paid">{formatNaira(financial.premiumPaidKobo)}</strong>
+        <span data-label="HMO position"><StatusBadge status={financial.premium.status} /><small>{formatNaira(variance)}</small></span>
+        <strong data-label="CAC net due">{assigned.assessment ? formatNaira(financial.assessmentDueKobo) : 'Not assigned'}</strong>
+        <span data-label="Enrollment"><StatusBadge status={enrollment.status} /></span>
+        <span data-label="Manage">{activeAssessment && <Button variant="secondary" icon={<SlidersHorizontal size={15} />} onClick={() => openFinancialAdjustment(enrollment)}>Adjust</Button>}</span>
+      </div>;
+    })}</div> : <EmptyState icon={<Users size={29} />} title="No matching enrollees" body="Adjust the enrollment year, search, or status filter." />)}
+    {selectedEnrollment && activeAssessment && <Modal title={`Manage ${activeAssessment.name}`} onClose={() => setSelectedEnrollment(null)}>
+      <div className="modal-form">
+        <p><strong>{fullName(selectedEnrollment.principal)}</strong></p>
+        <label className="checkbox-line"><input type="checkbox" checked={included} onChange={(event) => setIncluded(event.target.checked)} />Include this subscriber in the assessment</label>
+        <label>Subscriber adjustment (₦)<input type="number" step="0.01" value={adjustment} disabled={!included} onChange={(event) => setAdjustment(event.target.value)} /><small>Positive amounts increase the net due; negative amounts reduce it.</small></label>
+        <label>Adjustment note<textarea rows={3} value={adjustmentNote} disabled={!included} onChange={(event) => setAdjustmentNote(event.target.value)} /></label>
+        <div className="modal__actions"><Button variant="secondary" onClick={() => setSelectedEnrollment(null)}>Cancel</Button><Button disabled={savingAdjustment} onClick={() => void saveFinancialAdjustment()}>{savingAdjustment ? 'Saving...' : 'Save subscriber assessment'}</Button></div>
+      </div>
+    </Modal>}
   </>;
 }

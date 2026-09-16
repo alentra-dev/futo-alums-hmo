@@ -12,9 +12,9 @@ export function IconButton({ label, children, className, ...props }: ButtonHTMLA
 
 export function StatusBadge({ status }: { status: string }) {
   const normalized = status.toLowerCase();
-  const icon = normalized === 'verified' || normalized === 'submitted' || normalized === 'open'
+  const icon = normalized === 'verified' || normalized === 'submitted' || normalized === 'open' || normalized === 'paid in full'
     ? <CheckCircle2 size={14} />
-    : normalized === 'rejected' || normalized === 'closed'
+    : normalized === 'rejected' || normalized === 'closed' || normalized === 'underpaid'
       ? <XCircle size={14} />
       : normalized === 'pending' || normalized === 'scheduled'
         ? <Clock3 size={14} />

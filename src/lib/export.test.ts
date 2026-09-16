@@ -3,12 +3,13 @@ import { adminFullExportColumns, avonExportColumns, createEnrollmentWorkbook } f
 import { demoSnapshot } from '../data/demo';
 
 describe('enrollment export columns', () => {
-  it('keeps the internal payment field only in the admin full export', () => {
+  it('keeps all internal accounting fields only in the admin full export', () => {
     expect(adminFullExportColumns).toContain('FUTO HMO FULL PAYMNT');
     expect(avonExportColumns).not.toContain('FUTO HMO FULL PAYMNT');
-    expect(avonExportColumns).toEqual(
-      adminFullExportColumns.filter((column) => column !== 'FUTO HMO FULL PAYMNT'),
-    );
+    for (const column of ['HMO PAYMENT POSITION', 'HMO UNDERPAYMENT', 'HMO OVERPAYMENT', 'PROGRAM ASSESSMENT', 'ASSESSMENT PAID', 'ASSESSMENT NET DUE', 'FUTURE ENROLLMENT CREDIT']) {
+      expect(adminFullExportColumns).toContain(column);
+      expect(avonExportColumns).not.toContain(column);
+    }
   });
 
   it('moves AVON financial columns into the correct provider template positions', () => {
