@@ -18,15 +18,21 @@ export function enrollmentFinancialPosition(
   const premium = paymentPosition(enrollment.totalKobo, premiumPaidKobo);
   const assessmentPaidKobo = assessment ? verifiedPayments(related, assessment.id) : 0;
   const adjustmentKobo = adjustment?.adjustmentKobo ?? 0;
-  const assessmentNetKobo = assessment
-    ? assessment.amountKobo + premium.underpaymentKobo - premium.overpaymentKobo + adjustmentKobo - assessmentPaidKobo
-    : 0;
+  // The reconciliation model sweeps the HMO premium variance into the assessment position.
+  // Keep the two components separate so each can be collected into its own bank account.
+  const assessmentOwnNetKobo = assessment ? assessment.amountKobo + adjustmentKobo - assessmentPaidKobo : 0;
+  const premiumVarianceKobo = assessment ? premium.underpaymentKobo - premium.overpaymentKobo : 0;
+  const assessmentNetKobo = assessment ? assessmentOwnNetKobo + premiumVarianceKobo : 0;
 
   return {
     premiumPaidKobo,
     premium,
     assessmentPaidKobo,
     adjustmentKobo,
+    assessmentOwnNetKobo,
+    // What the subscriber should transfer to the assessment account right now.
+    assessmentOwnDueKobo: Math.max(0, assessmentOwnNetKobo),
+    premiumVarianceKobo,
     assessmentNetKobo,
     assessmentDueKobo: Math.max(0, assessmentNetKobo),
     assessmentOverpaymentKobo: Math.max(0, -assessmentNetKobo),

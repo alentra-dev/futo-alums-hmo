@@ -49,8 +49,9 @@ The GitHub repository is public. The application code may be public; all real pe
 - `src/lib/types.ts`: shared domain types and snapshot contracts.
 - `src/lib/money.ts`: integer-kobo calculations, fee rounding, and payment-position helpers.
 - `src/lib/financialPosition.ts`: HMO premium versus program-assessment allocation and balance calculations.
+- `src/lib/paymentInstruction.ts`: composes the single program account with the transfer reference for each payment purpose.
 - `src/lib/export.ts`: summary, full administrator, and AVON workbook generation.
-- `src/lib/enrollmentAccess.ts`: account-to-household selection and subscriber isolation helpers.
+- `src/lib/enrollmentAccess.ts`: account-to-household selection, subscriber isolation helpers, and `workspaceEnrollment` for administrators acting for a subscriber.
 - `src/lib/subscriberWorkflow.ts`: enrollment editability and family limits.
 - `src/lib/personValidation.ts` and `src/lib/personDetails.ts`: required/optional fields and dependent residence behavior.
 - `src/pages/JoinPage.tsx`: progressive new-subscriber application.
@@ -80,6 +81,20 @@ Roles:
 The UI distinguishes subscriber accounts from administrator-only accounts. Access-email changes are performed through a privileged Edge Function so the Auth identity and application linkage stay synchronized without rewriting historical enrollment email fields.
 
 Authorization must be enforced in PostgreSQL/RPC/storage policies. Never rely only on route guards or filtered frontend arrays.
+
+### 4.1 Administrators acting for a subscriber
+
+Some alumni never reach the portal and send their details to an administrator instead. An administrator opens a subscriber's workspace from **Enrollees → Act for** and completes any subscriber task for them: plan selection, household details, submission, and payment uploads.
+
+This is not impersonation of the subscriber's identity. The administrator stays signed in as themselves:
+
+- database access already permitted it — `can_access_household` admits program administrators for every household in the program, and administrators additionally bypass the closed-period check in `update_enrollment_details` and `select_enrollment_plan`;
+- `audit_row_change` records `auth.uid()`, so every change is attributed to the acting administrator and never to the subscriber who never signed in;
+- the frontend guard in `workspaceEnrollment` is convenience only. PostgreSQL remains the authorization boundary: a subscriber who forced an acting id would still be refused by `can_access_household`.
+
+Acting state is deliberately held in memory only. It does not survive a reload, a new tab, or sign-out, and a sticky banner naming the subscriber and the acting administrator's email is shown at all times with a one-click exit.
+
+**Consent is never given by an administrator.** An acting administrator does not see the subscriber's consent checkbox. They record consent the subscriber already gave elsewhere through `record_offline_consent`, which requires a program administrator, a non-empty description of how consent was received, and a non-future date. `enrollments.consent_channel` separates `portal` from `offline`, with `consent_recorded_by`, `consent_evidence_note`, and `consent_recorded_at` alongside. A `sync_consent_provenance` trigger keeps provenance consistent with `consented_at` no matter which RPC writes it, so clearing consent clears its attribution and a later portal consent supersedes an offline one. Acting administrators pass the stored `consentedAt` through unchanged on submission so recorded provenance survives.
 
 ## 5. Enrollment lifecycle
 
@@ -150,6 +165,19 @@ The net assessment due for an enrollee is:
 
 The result is floored at zero for collection, while the underlying premium position remains visible. Future credit is a planned amount and should be described to subscribers as becoming available when the assessment is settled. A future enhancement may require a true credit ledger when the next enrollment year opens.
 
+This combined figure is a **reconciliation position, not a payment instruction**. The program collects every payment into **one bank account**; HMO premiums and program assessments are distinguished only by the transfer reference the subscriber puts on the transfer, which is what makes the deposits reconcilable. The subscriber interface must therefore never present the combined net as a single amount to transfer, because the resulting payment would be recorded and referenced as an assessment while part of it is premium. `enrollmentFinancialPosition` also returns:
+
+- `assessmentOwnNetKobo` / `assessmentOwnDueKobo`: `assessment base + admin adjustment - verified assessment payments`, which is what the subscriber transfers under the assessment reference;
+- `premiumVarianceKobo`: the swept HMO under/overpayment, which is transferred under the HMO premium reference.
+
+`assessmentOwnNetKobo + premiumVarianceKobo === assessmentNetKobo` always holds. Subscriber-facing screens collect `assessmentOwnDueKobo`, disclose the premium variance separately, and show the combined position only as context. Administrator reports and exports continue to use `assessmentNetKobo`.
+
+### 7.3 One account, many references
+
+`src/lib/paymentInstruction.ts` composes every payment instruction shown to a user: bank details always come from the single program `paymentAccount`, and only `referencePrefix` varies by purpose. Use it rather than reading an account off an assessment.
+
+`financial_assessments` still carries its own `beneficiary`, `bank`, and `account_number` columns from migration `202609120019`. They are a second copy of the same account and were separately editable in program settings, so they could drift and hand a subscriber a stale account number. The assessment form now edits only the transfer reference, displays the inherited account read-only, rejects a reference that matches the HMO reference, and writes the program account values back on every save so stored rows converge. Removing those columns needs its own migration.
+
 HMO and assessment evidence use distinct, labeled upload actions. Both permit multiple confirmations. The administrator payment-review screen and exports identify the purpose.
 
 ## 8. 2026 operational state
@@ -214,6 +242,7 @@ Major stages:
 - `202608260017`: removal of the transaction tax and restoration of the then-current program fee model.
 - `202608280018`: optional person fields.
 - `202609120019`: separate financial assessments, enrollment adjustments, assessment-linked payments, workspace/admin/submission RPCs, audit triggers, and finalized 2026 1% + 2% premium fees.
+- `202609150020`: consent provenance columns on `enrollments`, the `sync_consent_provenance` trigger, `record_offline_consent`, and the `get_consent_records` side-car read. **Not yet deployed to production.**
 
 When adding a migration, document its purpose here and state whether it has been deployed to production.
 
@@ -253,12 +282,16 @@ npm run test:e2e
 
 `npm run check` runs ESLint, Vitest, TypeScript, and the production Vite build. The Playwright suite runs critical workflows in desktop Chromium and a mobile Chromium viewport. It also checks horizontal overflow and clipped controls on important screens.
 
+Demo-mode fixtures in `src/data/demo.ts` derive the preview period from the current date (open from 45 days ago to 45 days ahead) rather than fixed calendar dates. Hardcoded dates silently expired once the real window passed, which turned demo mode into a read-only portal and quietly removed plan selection, enrollment editing, and submission from end-to-end coverage. Keep demo dates relative.
+
 Current baseline as of this document update:
 
-- 13 Vitest files, 41 unit tests passing;
-- 10 Playwright scenarios passing: five workflows at desktop and mobile sizes;
+- 13 Vitest files, 45 unit tests passing;
+- 16 Playwright scenarios passing: eight workflows at desktop and mobile sizes;
 - production build passing;
 - Vite reports large chunks for the chart/core/Excel bundles; this is a performance warning, not a failed build.
+
+End-to-end coverage now includes both an open and a closed enrollment period, plan changes and enrollment submission, the family-coverage household rule in the new-subscriber flow, future-dated payment rejection, and the payment-review confirmation prompts.
 
 Important regression coverage includes fee rounding, payment positions, exports, duplicate matching, person validation, enrollment isolation helpers, magic-link callback behavior, new applications, payment uploads, admin review, admin tools, and closed-period subscriber behavior.
 
@@ -320,10 +353,11 @@ Administrators can:
 - configure NHIS and program fee rates with recalculation controls;
 - configure enrollment periods and plan offerings;
 - configure the HMO payment account;
-- configure a period assessment and its dedicated account;
+- configure a period assessment and the transfer reference that identifies its payments;
 - include/exclude an enrollee from an assessment and enter a signed adjustment/note;
 - change a subscriber's access email through the protected workflow;
 - manage administrator roles subject to owner controls;
+- act in a subscriber's workspace to complete their enrollment tasks when they cannot reach the portal, and record consent received offline;
 - inspect audit history and daily unique sign-in activity.
 
 Keep `docs/ADMIN_CHEATSHEET.md` aligned whenever an administrator workflow or label changes.
@@ -337,8 +371,43 @@ Keep `docs/ADMIN_CHEATSHEET.md` aligned whenever an administrator workflow or la
 - Continue provider-template regression tests whenever AVON changes its workbook fields or plan definitions.
 - Consider further bundle splitting for ExcelJS and charting if mobile load performance becomes a problem.
 - Before a new annual rollover, verify dates, offerings, rates, payment account, assessment status, hospital guidance, email copy, redirect URLs, SMTP, and exports in a non-production or dry-run path.
+- `.env.local` on a developer machine may hold production Supabase credentials, with `VITE_DEMO_MODE=true` as the only thing preventing `npm run dev` from operating on live data. Prefer a separate non-production project for local work, and confirm demo mode before exercising any mutation locally.
+- A follow-up migration should drop `beneficiary`, `bank`, and `account_number` from `financial_assessments` and keep only `reference_prefix`, so the single program account cannot be duplicated in storage at all (§7.3).
+- Open decision: whether sweeping the HMO premium variance into the assessment net (§7.2) is the intended long-term accounting treatment. The interface now keeps the two separately payable under distinct references, but the combined figure is still what administrator reports and exports present.
+- `relation` is free text for principals and dependents. AVON submissions and the family-composition rule (spouse plus up to four children under 21) would both benefit from a constrained vocabulary; dependent ages and relationships are currently unvalidated.
+- `paymentPosition` reports `underpaid`, `paid in full`, and `overpaid`. §7.1 also describes an `unpaid` state for enrollments with no verified payment; it is currently reported as `underpaid`. Splitting it would change exported values, so it needs a deliberate decision.
+- Enrollment edits are held in local component state with no unsaved-changes warning; navigating away discards them.
+- The administrator application review shows dependent counts but not dependent identities, so a family application is approved without its household being visible.
+
+### 2026-09-15 (administrators acting for subscribers)
+
+Added the ability for an administrator to complete enrollment tasks for alumni who cannot reach the portal and send details manually (§4.1). No read or write permission needed changing: `can_access_household` already admitted administrators and `audit_row_change` already recorded `auth.uid()`, so attribution to the acting administrator was correct by construction. The work added the entry point, a sticky acting banner with a one-click exit, and consent provenance.
+
+Migration `202609150020` adds `consent_channel`, `consent_recorded_by`, `consent_evidence_note`, and `consent_recorded_at` to `enrollments`, the `sync_consent_provenance` trigger, `record_offline_consent`, and `get_consent_records`. Existing consent is backfilled as `portal`.
+
+**This migration has not been applied to production.** It was written without a local PostgreSQL instance available, so it has not been executed anywhere. Apply it through the manually dispatched Supabase workflow and read the migration preview step before allowing the apply step to run.
 
 ## 17. Change log for this handoff
+
+### 2026-09-15 (UX, workflow, and reporting review)
+
+A full review of subscriber, new-applicant, administrator, and owner journeys was run against demo mode only. No production read or write occurred; this was verified by inspecting outbound requests across every route plus a payment upload. Fixes applied:
+
+- **Payment references.** The subscriber dashboard and payments screen led with the program assessment whenever one was assigned, presenting the combined reconciliation net (assessment base plus HMO shortfall) as a single amount to transfer under the assessment reference. Because the transfer reference is the only thing distinguishing the two obligations in one shared account, a subscriber following the interface would have sent premium money tagged as an assessment payment, leaving the premium recorded as underpaid and the deposit unreconcilable. Both screens now lead with whichever obligation is outstanding, ask for only `assessmentOwnDueKobo` under the assessment reference, and disclose the premium variance with its own reference. The reconciliation formula in §7.2 is unchanged.
+- **Duplicate account storage.** Program settings collected bank details twice — once for HMO premiums and once per assessment — for what is a single program account, so the two copies could drift. The assessment now inherits the program account and configures only its transfer reference (§7.3).
+- **Settled assessments** no longer render as `₦0.00 ... due`.
+- **Family coverage in the new-subscriber flow** accepted zero dependents, so an applicant could submit family pricing covering one person. `householdValidationMessage` now gates step 3 and submission, matching the renewal flow.
+- **Public join page** disclosed a 15% program administrative fee through a stale fallback when no period was loaded. It now uses the configured rates, defaulting to 1% NHIS and 2% program administration.
+- **Administrator dashboard** excluded program-assessment payments from the pending-review metric and queue preview, hiding them from the operational overview. Both now cover every pending confirmation and label its purpose.
+- **Payment verification and rejection** were single-click and irreversible. Both now confirm with amount, purpose, and subscriber. Administrator role changes confirm as well.
+- **Assessment configuration** failed silently on error and accepted a fee portion and future credit that did not sum to the base contribution. Both are now reported in the form.
+- **Program settings** showed a hardcoded placeholder list of three administrators; it now links to the real access page instead of implying membership.
+- Administrator payment uploads reset to the HMO premium when the selected subscriber has no assessment, which previously left the upload form unrendered.
+- Payment dates are limited to today in the program time zone; exports write a blank provider date instead of `undefined/undefined/`; the payment-review date uses the program time zone.
+- Assessment labels follow the configured assessment name rather than hardcoded "CAC".
+- Modals close on `Escape` and move focus into the dialog; in-app navigation replaced full-page `location.assign` reloads; history and access-page load errors are surfaced instead of being swallowed.
+
+Known follow-ups are recorded in §16.
 
 ### 2026-09-15
 

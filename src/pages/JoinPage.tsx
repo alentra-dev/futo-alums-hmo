@@ -7,7 +7,7 @@ import { PersonFields } from '../components/PersonFields';
 import { Button } from '../components/ui';
 import { useApp } from '../context/AppContext';
 import { syncDependentResidences } from '../lib/personDetails';
-import { joinStepAfterWorkspaceRefresh } from '../lib/subscriberWorkflow';
+import { householdValidationMessage, joinStepAfterWorkspaceRefresh, MAX_FAMILY_DEPENDENTS } from '../lib/subscriberWorkflow';
 import { formatBasisPoints, formatNaira, planTotalKobo } from '../lib/money';
 import { isDemoMode, supabase } from '../lib/supabase';
 import type { JoinConfig, JoinWorkspace, Person, PlanCategory, SubscriberApplication } from '../lib/types';
@@ -130,6 +130,14 @@ export function JoinPage() {
 
   const save = async (submit: boolean) => {
     if (!draft) return;
+    // Family pricing is materially more expensive than individual cover, so the household
+    // must match the selected category before the application can advance or be submitted.
+    const householdIssue = householdValidationMessage(draft.category, draft.dependents.length);
+    if (householdIssue && (submit || step >= 3)) {
+      setStep(3);
+      setError(householdIssue);
+      return;
+    }
     setBusy(submit ? 'submit' : 'save');
     setError('');
     try {
@@ -179,7 +187,7 @@ export function JoinPage() {
   };
 
   const addDependent = () => {
-    if (!draft || draft.dependents.length >= 5) return;
+    if (!draft || draft.dependents.length >= MAX_FAMILY_DEPENDENTS) return;
     setDraft({
       ...draft,
       dependents: [...draft.dependents, {
@@ -218,7 +226,7 @@ export function JoinPage() {
       </form>
     </section>
     <section className="join-plans">
-      <div className="join-section-title"><p className="eyebrow">{config.period?.year ?? 'Upcoming'} plans</p><h2>Compare subscriber totals</h2><p>Every displayed amount includes {formatBasisPoints(config.period?.nhisFeeBasisPoints ?? 100)}% AVON NHIS, {formatBasisPoints(config.period?.programFeeBasisPoints ?? 1500)}% program administrative fee.</p></div>
+      <div className="join-section-title"><p className="eyebrow">{config.period?.year ?? 'Upcoming'} plans</p><h2>Compare subscriber totals</h2><p>Every displayed amount includes {formatBasisPoints(surchargeRates(config.period).nhisFeeBasisPoints)}% AVON NHIS, {formatBasisPoints(surchargeRates(config.period).programFeeBasisPoints)}% program administrative fee.</p></div>
       {config.acceptingApplications ? <div className="plan-grid">{config.plans.map((plan) => <article className="plan-card" key={plan.id}><span className="plan-code">{plan.code.replaceAll('_', ' ')}</span><h2>{plan.name}</h2><p>{plan.description}</p><div className="join-plan-prices"><span><small>Individual</small><strong>{formatNaira(planAmount(plan, 'individual', config.period))}</strong></span><span><small>Family</small><strong>{formatNaira(planAmount(plan, 'family', config.period))}</strong></span></div><ul>{plan.highlights.map((highlight) => <li key={highlight}><Check size={15} />{highlight}</li>)}</ul></article>)}</div> : <div className="info-banner"><ShieldCheck size={19} /><span>New applications are currently closed. The next enrollment period will appear here when administrators open it.</span></div>}
     </section>
     <footer className="join-footer"><Link to="/privacy">Privacy notice</Link><span>Privacy contact: Jude Oruoghor</span></footer>
@@ -277,7 +285,7 @@ export function JoinPage() {
 
           {step === 3 && <form className="form-section join-step" onSubmit={(event) => { event.preventDefault(); void save(false); }}>
             <div className="section-heading"><span><Users size={20} /></span><div><h2>{draft.category === 'family' ? 'Family members' : 'Individual coverage'}</h2><p>{draft.category === 'family' ? 'Identity and residence details are required. Personal contact details are optional.' : 'No dependent information is needed.'}</p></div></div>
-            {draft.category === 'family' ? <div className="join-dependents">{draft.dependents.map((dependent, index) => <section key={dependent.id}><header><strong>Dependent {index + 1}</strong><button type="button" title="Remove dependent" aria-label="Remove dependent" onClick={() => setDraft({ ...draft, dependents: draft.dependents.filter((item) => item.id !== dependent.id) })}><Trash2 size={17} /></button></header><PersonFields person={dependent} principal={draft.principal} onChange={updateDependent} /></section>)}<Button type="button" variant="secondary" icon={<Plus size={17} />} disabled={draft.dependents.length >= 5} onClick={addDependent}>Add dependent</Button></div> : <div className="join-individual-note"><UserPlus size={26} /><span><strong>{draft.principal.firstName} {draft.principal.surname}</strong><small>Principal member only</small></span></div>}
+            {draft.category === 'family' ? <div className="join-dependents">{draft.dependents.length === 0 && <div className="info-banner"><Users size={18} /><span>Family coverage needs at least one dependent. Add your spouse or a child, or return to the previous step and choose individual coverage.</span></div>}{draft.dependents.map((dependent, index) => <section key={dependent.id}><header><strong>Dependent {index + 1}</strong><button type="button" title="Remove dependent" aria-label="Remove dependent" onClick={() => setDraft({ ...draft, dependents: draft.dependents.filter((item) => item.id !== dependent.id) })}><Trash2 size={17} /></button></header><PersonFields person={dependent} principal={draft.principal} onChange={updateDependent} /></section>)}<Button type="button" variant="secondary" icon={<Plus size={17} />} disabled={draft.dependents.length >= MAX_FAMILY_DEPENDENTS} onClick={addDependent}>Add dependent</Button></div> : <div className="join-individual-note"><UserPlus size={26} /><span><strong>{draft.principal.firstName} {draft.principal.surname}</strong><small>Principal member only</small></span></div>}
             <div className="join-step__actions"><Button type="button" variant="secondary" onClick={() => setStep(2)}>Back</Button><Button disabled={busy === 'save'} icon={<ArrowRight size={17} />}>{busy === 'save' ? 'Saving...' : 'Save and continue'}</Button></div>
           </form>}
 

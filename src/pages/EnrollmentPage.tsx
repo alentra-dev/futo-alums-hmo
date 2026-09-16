@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { Check, ChevronDown, ChevronUp, Hospital, Info, Plus, ShieldCheck, Trash2, UserRound } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { fullName } from '../lib/format';
+import { formatDate, fullName, programDateValue } from '../lib/format';
 import { errorMessage } from '../lib/errorMessage';
-import { subscriberEnrollment } from '../lib/enrollmentAccess';
+import { canActForSubscribers, workspaceEnrollment } from '../lib/enrollmentAccess';
 import { FeeBreakdown } from '../components/FeeBreakdown';
 import { PersonFields } from '../components/PersonFields';
 import { surchargeRates } from '../lib/surchargeRates';
@@ -14,13 +15,17 @@ import { householdValidationMessage, isEnrollmentEditable, MAX_FAMILY_DEPENDENTS
 import type { Person } from '../lib/types';
 
 export function EnrollmentPage() {
-  const { snapshot, activeEnrollmentId, updateEnrollment } = useApp();
-  const original = subscriberEnrollment(snapshot!, activeEnrollmentId);
+  const { snapshot, activeEnrollmentId, actingEnrollmentId, updateEnrollment, recordOfflineConsent } = useApp();
+  const original = workspaceEnrollment(snapshot!, activeEnrollmentId, actingEnrollmentId);
   const [draft, setDraft] = useState(original);
   const [expanded, setExpanded] = useState<string>(original.principal.id);
   const [consent, setConsent] = useState(Boolean(original.consentedAt));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const acting = Boolean(actingEnrollmentId) && canActForSubscribers(snapshot!);
+  const consentRecord = snapshot!.consentRecords.find((item) => item.enrollmentId === original.id);
+  const [consentNote, setConsentNote] = useState(consentRecord?.note ?? '');
+  const [consentDate, setConsentDate] = useState(() => (consentRecord?.consentedAt ?? new Date().toISOString()).slice(0, 10));
   const editable = isEnrollmentEditable(snapshot!.period);
   const householdIssue = householdValidationMessage(draft.category, draft.dependents.length);
   const selectedPlan = snapshot!.plans.find((plan) => plan.id === draft.planId);
@@ -30,8 +35,10 @@ export function EnrollmentPage() {
     setDraft(original);
     setExpanded(original.principal.id);
     setConsent(Boolean(original.consentedAt));
+    setConsentNote(consentRecord?.note ?? '');
+    setConsentDate((consentRecord?.consentedAt ?? new Date().toISOString()).slice(0, 10));
     setError('');
-  }, [original]);
+  }, [original, consentRecord]);
 
   const replacePerson = (person: Person) => {
     if (person.id === draft.principal.id) setDraft({ ...draft, principal: person, dependents: syncDependentResidences(draft.principal, person, draft.dependents) });
@@ -46,6 +53,17 @@ export function EnrollmentPage() {
   };
 
 
+  const saveOfflineConsent = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      await recordOfflineConsent(original.id, consentNote.trim(), new Date(`${consentDate}T12:00:00Z`).toISOString());
+      setConsent(true);
+    } catch (reason) {
+      setError(errorMessage(reason, 'Unable to record the offline consent.'));
+    } finally { setBusy(false); }
+  };
+
   const save = async (submit: boolean) => {
     if (!editable) return;
     if (householdIssue) {
@@ -59,7 +77,9 @@ export function EnrollmentPage() {
       return;
     }
     if (submit && !consent) {
-      setError('Confirm the family-data consent before submitting the enrollment.');
+      setError(acting
+        ? 'Record the consent this subscriber gave before submitting their enrollment.'
+        : 'Confirm the family-data consent before submitting the enrollment.');
       return;
     }
     setBusy(true);
@@ -67,7 +87,9 @@ export function EnrollmentPage() {
     try {
       await updateEnrollment(draft.id, {
         ...draft,
-        consentedAt: submit ? new Date().toISOString() : null,
+        // Acting administrators never stamp consent themselves. Passing the stored value
+        // through leaves consented_at unchanged, so its recorded provenance survives.
+        consentedAt: acting ? original.consentedAt : submit ? new Date().toISOString() : null,
         status: submit ? 'submitted' : 'draft',
         completeness: submit ? 100 : draft.completeness,
       });
@@ -95,13 +117,28 @@ export function EnrollmentPage() {
         </section>
 
         <section className="form-section"><div className="section-heading"><span><Hospital size={20} /></span><div><h2>Care preference</h2><p>Confirm the selected plan and add a preferred hospital when known.</p></div></div>
-          <div className="selection-summary"><div><small>Selected plan</small><strong>{selectedPlan?.name ?? 'No plan selected'}</strong><span>{draft.category} coverage</span></div>{editable && <a href={`${import.meta.env.BASE_URL}plans`}>Change plan</a>}</div>
+          <div className="selection-summary"><div><small>Selected plan</small><strong>{selectedPlan?.name ?? 'No plan selected'}</strong><span>{draft.category} coverage</span></div>{editable && <Link to="/plans">Change plan</Link>}</div>
           <label>Preferred hospital (optional)<input disabled={!editable} list="hospitals" value={draft.hospital} onChange={(e) => setDraft({ ...draft, hospital: e.target.value })} placeholder="Start typing a hospital name" /></label>
           <datalist id="hospitals">{snapshot!.hospitalSuggestions.map((hospital) => <option key={hospital} value={hospital} />)}</datalist>
         </section>
 
         <section className="form-section"><div className="section-heading"><span><ShieldCheck size={20} /></span><div><h2>Review and submit</h2><p>This final confirmation sends the enrollment to administrators.</p></div></div>
-          <label className="consent-box"><input type="checkbox" disabled={!editable} checked={consent} onChange={(e) => setConsent(e.target.checked)} required /><span>I authorize the FUTO Alums HMO Program to process and share the information in this enrollment with AVON and necessary service providers. I confirm that I am authorized to provide information for each listed family member and have informed adult family members. Records may be retained for seven years. <a href={`${import.meta.env.BASE_URL}privacy`}>Read the privacy notice</a>.</span></label>
+          {acting
+            // An administrator cannot give the subscriber's consent. They record consent the
+            // subscriber already gave elsewhere, with evidence of how it was received.
+            ? <div className="offline-consent">
+              {consentRecord?.channel === 'offline'
+                ? <p className="offline-consent__done"><ShieldCheck size={17} />Consent recorded on {formatDate(consentRecord.consentedAt, snapshot!.program.timezone)} by {consentRecord.recordedBy ?? 'an administrator'}: “{consentRecord.note}”</p>
+                : consent
+                  ? <p className="offline-consent__done"><ShieldCheck size={17} />This subscriber gave consent in the portal on {formatDate(draft.consentedAt!, snapshot!.program.timezone)}.</p>
+                  : <p>Record the consent {fullName(draft.principal)} already gave outside the portal. This is stored against your administrator account, not theirs.</p>}
+              {editable && <div className="form-grid">
+                <label>Date consent was given<input type="date" max={programDateValue(snapshot!.program.timezone)} value={consentDate} onChange={(event) => setConsentDate(event.target.value)} /></label>
+                <label className="span-2">How consent was received<textarea rows={2} required value={consentNote} onChange={(event) => setConsentNote(event.target.value)} placeholder="Signed form received by WhatsApp on 12 June and filed offline" /></label>
+                <div className="span-2"><Button type="button" variant="secondary" disabled={busy || !consentNote.trim()} icon={<ShieldCheck size={17} />} onClick={() => void saveOfflineConsent()}>{consentRecord?.channel === 'offline' ? 'Update recorded consent' : 'Record consent'}</Button></div>
+              </div>}
+            </div>
+            : <label className="consent-box"><input type="checkbox" disabled={!editable} checked={consent} onChange={(e) => setConsent(e.target.checked)} required /><span>I authorize the FUTO Alums HMO Program to process and share the information in this enrollment with AVON and necessary service providers. I confirm that I am authorized to provide information for each listed family member and have informed adult family members. Records may be retained for seven years. <Link to="/privacy">Read the privacy notice</Link>.</span></label>}
         </section>
         <div className="sticky-actions"><span>{editable ? 'Next: notify payment after submission.' : 'This enrollment is read only.'}</span><div className="sticky-actions__buttons">{editable && <Button type="button" variant="secondary" disabled={busy} onClick={() => void save(false)}>Save progress</Button>}<Button type="submit" disabled={busy || !editable}>{busy ? 'Saving…' : editable ? 'Submit enrollment' : 'Enrollment closed'}</Button></div></div>
       </form>

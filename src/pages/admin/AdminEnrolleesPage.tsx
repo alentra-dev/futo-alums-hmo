@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Download, FileSpreadsheet, Search, SlidersHorizontal, Users } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Download, FileSpreadsheet, Search, SlidersHorizontal, UserCog, Users } from 'lucide-react';
 import { Button, EmptyState, Modal, PageHeader, StatusBadge } from '../../components/ui';
 import { loadFinancialWorkspace, useApp } from '../../context/AppContext';
 import { defaultAdminPeriod } from '../../lib/enrollmentPeriods';
@@ -12,7 +13,8 @@ import { loadSurchargeRates, withSurchargeRates } from '../../lib/surchargeRates
 import type { Enrollment, EnrollmentPeriod, EnrollmentPeriodSnapshot, ProgramSnapshot } from '../../lib/types';
 
 export function AdminEnrolleesPage() {
-  const { snapshot } = useApp();
+  const { snapshot, actForSubscriber } = useApp();
+  const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('all');
   const [periods, setPeriods] = useState<EnrollmentPeriod[]>([snapshot!.period]);
@@ -93,6 +95,12 @@ export function AdminEnrolleesPage() {
   };
 
 
+  const beginActingFor = (enrollment: Enrollment) => {
+    if (!window.confirm(`Work in ${fullName(enrollment.principal)}'s portal on their behalf? Every change you make is recorded in the audit history against your administrator account.`)) return;
+    actForSubscriber(enrollment.id);
+    navigate('/account');
+  };
+
   const activeAssessment = periodData.assessments.find((item) => item.active);
   const openFinancialAdjustment = (enrollment: Enrollment) => {
     const current = activeAssessment ? periodData.assessmentAdjustments.find((item) => item.assessmentId === activeAssessment.id && item.enrollmentId === enrollment.id) : undefined;
@@ -144,7 +152,7 @@ export function AdminEnrolleesPage() {
       <span>{loadingPeriod ? 'Loading...' : `${rows.length} records`}</span>
     </div>
     {periodError && <p className="form-error" role="alert">{periodError}</p>}
-    {!loadingPeriod && (rows.length ? <div className="data-table admin-table"><div className="data-table__head"><span>Member</span><span>Plan</span><span>Plan type</span><span>Total payable</span><span>Verified paid</span><span>HMO position</span><span>CAC net due</span><span>Enrollment</span><span>Manage</span></div>{rows.map((enrollment) => {
+    {!loadingPeriod && (rows.length ? <div className="data-table admin-table"><div className="data-table__head"><span>Member</span><span>Plan</span><span>Plan type</span><span>Total payable</span><span>Verified paid</span><span>HMO position</span><span>{activeAssessment ? `${activeAssessment.name} net due` : 'Assessment net due'}</span><span>Enrollment</span><span>Manage</span></div>{rows.map((enrollment) => {
       const assigned = assessmentForEnrollment(enrollment.id, periodData.assessments, periodData.assessmentAdjustments);
       const financial = enrollmentFinancialPosition(enrollment, periodData.payments, assigned.assessment, assigned.adjustment);
       const variance = financial.premium.status === 'overpaid' ? financial.premium.overpaymentKobo : financial.premium.underpaymentKobo;
@@ -155,9 +163,9 @@ export function AdminEnrolleesPage() {
         <strong data-label="Total payable">{formatNaira(enrollment.totalKobo)}</strong>
         <strong data-label="Verified paid">{formatNaira(financial.premiumPaidKobo)}</strong>
         <span data-label="HMO position"><StatusBadge status={financial.premium.status} /><small>{formatNaira(variance)}</small></span>
-        <strong data-label="CAC net due">{assigned.assessment ? formatNaira(financial.assessmentDueKobo) : 'Not assigned'}</strong>
+        <strong data-label={activeAssessment ? `${activeAssessment.name} net due` : 'Assessment net due'}>{assigned.assessment ? formatNaira(financial.assessmentDueKobo) : 'Not assigned'}</strong>
         <span data-label="Enrollment"><StatusBadge status={enrollment.status} /></span>
-        <span data-label="Manage">{activeAssessment && <Button variant="secondary" icon={<SlidersHorizontal size={15} />} onClick={() => openFinancialAdjustment(enrollment)}>Adjust</Button>}</span>
+        <span data-label="Manage">{activeAssessment && <Button variant="secondary" icon={<SlidersHorizontal size={15} />} onClick={() => openFinancialAdjustment(enrollment)}>Adjust</Button>}{selectedPeriodId === snapshot!.period.id && <Button variant="secondary" icon={<UserCog size={15} />} onClick={() => beginActingFor(enrollment)}>Act for</Button>}</span>
       </div>;
     })}</div> : <EmptyState icon={<Users size={29} />} title="No matching enrollees" body="Adjust the enrollment year, search, or status filter." />)}
     {selectedEnrollment && activeAssessment && <Modal title={`Manage ${activeAssessment.name}`} onClose={() => setSelectedEnrollment(null)}>

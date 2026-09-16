@@ -44,6 +44,21 @@ describe('enrollment export columns', () => {
     expect(await rows('admin')).toBeGreaterThan(1);
   });
 
+  it('leaves a missing date blank rather than writing a malformed provider value', async () => {
+    const ExcelJS = await import('exceljs');
+    const enrollment = demoSnapshot.enrollments[0];
+    const snapshot = {
+      ...demoSnapshot,
+      enrollments: [{ ...enrollment, status: 'submitted' as const, dependents: [], principal: { ...enrollment.principal, enrollmentDate: '' } }],
+    };
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(await createEnrollmentWorkbook(snapshot, 'avon'));
+    const sheet = workbook.worksheets[0];
+    const headers = (sheet.getRow(1).values as unknown[]).slice(1);
+    const cell = sheet.getRow(2).getCell(headers.indexOf('ENROLLMENT_DATE(DD/MM/YYYY)') + 1).value;
+    expect(cell ?? '').toBe('');
+  });
+
   it('uses principal contact details only for blank dependent fields in the AVON export', async () => {
     const ExcelJS = await import('exceljs');
     const enrollment = demoSnapshot.enrollments[0];

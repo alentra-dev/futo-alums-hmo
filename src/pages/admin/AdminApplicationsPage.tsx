@@ -41,7 +41,11 @@ export function AdminApplicationsPage() {
   }), [applications, filter, query]);
 
   const review = async (application: AdminSubscriberApplication, action: 'approve' | 'request_changes' | 'mark_duplicate') => {
-    if (action === 'approve' && !window.confirm(`Approve ${personName(application.principal)} as a new subscriber?`)) return;
+    const openCount = application.candidates.filter((candidate) => candidate.status === 'open').length;
+    const approvalPrompt = openCount
+      ? `${personName(application.principal)} still has ${openCount} unresolved possible match${openCount === 1 ? '' : 'es'} with an existing subscriber. Approving now creates a separate subscriber record. Continue?`
+      : `Approve ${personName(application.principal)} as a new subscriber?`;
+    if (action === 'approve' && !window.confirm(approvalPrompt)) return;
     if (action === 'mark_duplicate' && !window.confirm('Mark this as a duplicate and close the application?')) return;
     if (isDemoMode) {
       setApplications((current) => current.map((item) => item.id === application.id ? { ...item, status: action === 'approve' ? 'approved' : action === 'request_changes' ? 'request_changes' : 'rejected', adminNote: notes[item.id]?.trim() || null } : item));

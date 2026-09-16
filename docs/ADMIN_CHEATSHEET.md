@@ -23,7 +23,8 @@ Use **Admin workspace** in the left navigation after signing in. Subscriber heal
 | **Portal activity** | Review daily unique sign-ins and distinguish subscriber-linked, applicant, and admin-only activity |
 | **Subscriber access** | Change the email used to sign in without changing AVON enrollment email history |
 | **Audit history** | Trace who changed what and when |
-| **Program settings** | Manage time zone, HMO fees, program assessments, enrollment dates/status, annual rollover, and payment accounts |
+| **Program settings** | Manage time zone, HMO fees, program assessments, enrollment dates/status, annual rollover, and the program payment account |
+| **Enrollees → Act for** | Work in a subscriber's portal to complete their tasks when they cannot access it themselves |
 | **Administrator access** | Owner-only control for adding or removing administrators |
 
 ## New subscriber review
@@ -70,7 +71,7 @@ Important:
 For every pending payment:
 
 1. Select **View proof**.
-2. Confirm whether it is an **HMO premium** or **program assessment**, then match the subscriber, amount, payment date, transfer reference, correct beneficiary account, and bank transaction.
+2. Confirm whether it is an **HMO premium** or **program assessment**, then match the subscriber, amount, payment date, transfer reference, and bank transaction. The reference is what separates the two purposes in the shared account, so a premium-referenced deposit must not be verified as an assessment payment or the reverse.
 3. Check the custodian's bank record independently.
 4. Select:
    - **Verify** only when the bank record and uploaded evidence agree.
@@ -151,7 +152,7 @@ The finalized 2026 HMO fee model is 1% AVON NHIS plus 2% program administration.
 
 ### Program assessment
 
-Use this section for a distinct non-premium contribution such as CAC/entity-registration costs. Configure its name, description, base amount, retained fee portion, future-enrollment credit, credit year, due date, active state, and dedicated payment account.
+Use this section for a distinct non-premium contribution such as CAC/entity-registration costs. Configure its name, description, base amount, retained fee portion, future-enrollment credit, credit year, due date, active state, and the transfer reference that identifies its payments. Assessment payments are collected into the same program account as HMO premiums; the reference is the only difference, so it must not match the HMO reference.
 
 Use **Enrollees** to include or exclude a subscriber and to enter a signed adjustment with a clear note. The displayed net amount combines the assessment base, exact HMO under/overpayment, any administrator adjustment, and verified assessment payments. Do not use an adjustment to hide a payment; record every transfer as a payment confirmation.
 
@@ -167,9 +168,29 @@ Administrators may adjust opening and closing dates and add an extension or clos
 
 **Create next enrollment year** copies the current offerings and subscriber households into the next year as the starting point. Before opening the new year, verify the dates, fees, prices, benefits, active plans, and payment account against the new provider proposal.
 
-### HMO payment account
+### Program payment account
 
-Confirm the account name, bank, 10-digit account number, and transfer-reference prefix before saving. This account is for HMO premiums. An active program assessment can have a different account, so verify which purpose a subscriber selected before reviewing evidence.
+Confirm the account name, bank, 10-digit account number, and transfer-reference prefix before saving. This one account collects every program payment. An active program assessment reuses it and adds only its own transfer reference, so changing the account here changes it for both purposes. Verify which purpose a subscriber selected before reviewing evidence.
+
+## Acting for a subscriber
+
+Use this when an alumnus cannot access the portal and sends their details to you directly.
+
+1. Open **Enrollees**, find the subscriber, and select **Act for**. Confirm the prompt.
+2. A banner names the subscriber for as long as you are acting. Everything you do is recorded in the audit history against **your** administrator account, never theirs.
+3. Complete any subscriber task: change the plan, edit household details, submit the enrollment, or upload a payment confirmation.
+4. Select **Stop acting** to return to administration. Acting never survives a reload or sign-out.
+
+### Recording consent
+
+You cannot give consent for a subscriber, so the consent checkbox is replaced by a consent record.
+
+1. Collect the subscriber's consent yourself — signed form, WhatsApp confirmation, or email — and file it offline.
+2. On **Enrollment**, enter the date consent was given and a short description of how it was received, including any offline reference.
+3. Select **Record consent**. The entry stores your name, the date, and your description, and is visible to any administrator who opens that enrollment.
+4. An enrollment cannot be submitted on a subscriber's behalf until consent is recorded.
+
+Never record consent you have not actually received. The record is the program's evidence that the subscriber authorised the submission of their own and their family's information.
 
 ## Administrator access
 
@@ -186,7 +207,7 @@ Give admin access only to people actively performing program administration. Rem
 1. Resolve every pending new-subscriber application.
 2. Follow up on draft enrollments and missing plans.
 3. Review all pending payment evidence.
-4. Reconcile HMO and assessment collections separately against their respective bank accounts.
+4. Reconcile HMO and assessment collections separately by transfer reference against the single program bank account.
 5. Download and review the selected year's **Summary** and **Admin full export**.
 6. Confirm all AVON-bound records are submitted and complete.
 7. Close the enrollment period in **Program settings**.

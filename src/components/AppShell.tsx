@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
-import { Activity, ChartNoAxesColumn, ClipboardCheck, FileClock, FileUp, HeartPulse, KeyRound, LayoutDashboard, LogOut, Menu, Settings, ShieldCheck, UserPlus, Users, X } from 'lucide-react';
+import { Activity, ChartNoAxesColumn, ClipboardCheck, FileClock, FileUp, HeartPulse, KeyRound, LayoutDashboard, LogOut, Menu, Settings, ShieldCheck, UserCog, UserPlus, Users, X } from 'lucide-react';
 import clsx from 'clsx';
 import { useApp } from '../context/AppContext';
-import { initials } from '../lib/format';
+import { fullName, initials } from '../lib/format';
 import { IconButton } from './ui';
 
 type NavigationItem = { to: string; label: string; mobileLabel?: string; icon: LucideIcon };
@@ -29,13 +29,15 @@ const adminNav: NavigationItem[] = [
 ];
 
 export function AppShell() {
-  const { snapshot, activeEnrollmentId, setActiveEnrollmentId, signOut, demoMode, setDemoRole, notice, dismissNotice } = useApp();
+  const { snapshot, activeEnrollmentId, setActiveEnrollmentId, signOut, demoMode, setDemoRole, notice, dismissNotice, actingEnrollmentId, stopActingForSubscriber } = useApp();
   const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const profile = snapshot!.profile;
   const canAdmin = profile.role === 'admin' || profile.role === 'owner';
   const hasSubscriberWorkspace = snapshot!.subscriberEnrollmentIds.length > 0;
+  const actingFor = actingEnrollmentId && canAdmin ? snapshot!.enrollments.find((item) => item.id === actingEnrollmentId) : undefined;
+  const leaveActing = () => { stopActingForSubscriber(); navigate('/admin/enrollees'); };
   const subscriberWorkspaces = snapshot!.enrollments.filter((item) => snapshot!.subscriberEnrollmentIds.includes(item.id));
   const nav = useMemo(() => {
     if (canAdmin && location.pathname.startsWith('/admin')) return adminNav;
@@ -57,7 +59,7 @@ export function AppShell() {
         {nav.map(({ to, label, icon: Icon }) => <NavLink key={to} to={to} end={to === '/' || to === '/admin'} onClick={() => setMenuOpen(false)}><Icon size={19} />{label}</NavLink>)}
       </nav>
       <div className="sidebar__footer">
-        {canAdmin && hasSubscriberWorkspace && <button className="workspace-switch" onClick={swapWorkspace}><ShieldCheck size={18} /><span>{location.pathname.startsWith('/admin') ? 'Subscriber view' : 'Admin workspace'}</span></button>}
+        {canAdmin && (hasSubscriberWorkspace || actingFor) && <button className="workspace-switch" onClick={swapWorkspace}><ShieldCheck size={18} /><span>{location.pathname.startsWith('/admin') ? 'Subscriber view' : 'Admin workspace'}</span></button>}
         <div className="profile-mini"><span className="avatar">{initials(profile.displayName)}</span><span><strong>{profile.displayName}</strong><small>{profile.role}</small></span></div>
         <button className="signout" onClick={() => void signOut()}><LogOut size={17} />Sign out</button>
       </div>
@@ -65,7 +67,7 @@ export function AppShell() {
 
     {menuOpen && <button className="sidebar-scrim" aria-label="Close navigation" onClick={() => setMenuOpen(false)} />}
 
-    <div className="app-main">
+    <div className={clsx('app-main', actingFor && 'app-main--acting')}>
       <header className="topbar">
         <IconButton label="Open navigation" className="menu-button" onClick={() => setMenuOpen(true)}><Menu size={22} /></IconButton>
         <div className="topbar__period"><span className="live-dot" />{snapshot!.period.year} enrollment <strong>{snapshot!.period.status}</strong></div>
@@ -79,6 +81,11 @@ export function AppShell() {
         </div>
       </header>
       {demoMode && <div className="demo-banner">Preview environment · Synthetic records only</div>}
+      {actingFor && <div className="acting-banner" role="status">
+        <UserCog size={18} />
+        <span>You are acting for <strong>{fullName(actingFor.principal)}</strong>. Every change is recorded in the audit history against <strong>{profile.email}</strong>, not the subscriber.</span>
+        <button onClick={leaveActing}>Stop acting</button>
+      </div>}
       {notice && <div className="toast" role="status"><span>{notice}</span><IconButton label="Dismiss" onClick={dismissNotice}><X size={18} /></IconButton></div>}
       <main className="page-content"><Outlet /></main>
       <nav className="mobile-nav" aria-label="Mobile navigation">

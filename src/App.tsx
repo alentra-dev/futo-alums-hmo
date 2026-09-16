@@ -30,9 +30,12 @@ function AdminGuard({ children }: { children: ReactNode }) {
 }
 
 function SubscriberGuard({ children }: { children: ReactNode }) {
-  const { snapshot } = useApp();
+  const { snapshot, actingEnrollmentId } = useApp();
   const canAdmin = snapshot?.profile.role === 'admin' || snapshot?.profile.role === 'owner';
-  return snapshot?.subscriberEnrollmentIds.length ? children : <Navigate to={canAdmin ? '/admin' : '/login'} replace />;
+  // An administrator acting for a subscriber who cannot reach the portal works in the
+  // subscriber screens even when their own account has no household.
+  const acting = canAdmin && Boolean(actingEnrollmentId);
+  return snapshot?.subscriberEnrollmentIds.length || acting ? children : <Navigate to={canAdmin ? '/admin' : '/login'} replace />;
 }
 
 export default function App() {

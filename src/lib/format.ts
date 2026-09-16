@@ -4,6 +4,13 @@ export const DEFAULT_TIMEZONE = 'Africa/Lagos';
 export const formatDate = (value: string, timeZone = DEFAULT_TIMEZONE) => new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone }).format(parseISO(value));
 export const formatDateTime = (value: string, timeZone = DEFAULT_TIMEZONE) => new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true, timeZone }).format(parseISO(value));
 
+/** Today's calendar date in the program time zone, as a `yyyy-mm-dd` date-input value. */
+export function programDateValue(timeZone = DEFAULT_TIMEZONE, now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now);
+  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${value.year}-${value.month}-${value.day}`;
+}
+
 export function zonedInputValue(value: string, timeZone = DEFAULT_TIMEZONE) {
   const parts = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(parseISO(value));
   const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? '';

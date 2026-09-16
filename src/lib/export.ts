@@ -27,7 +27,9 @@ export const avonExportColumns = adminFullExportColumns.filter((column) => !inte
 export type EnrollmentExportKind = 'avon' | 'admin';
 
 function dateForAvon(value: string) {
-  const [year, month, day] = value.slice(0, 10).split('-');
+  const [year, month, day] = (value ?? '').slice(0, 10).split('-');
+  // A missing or malformed date must leave the provider cell blank rather than emit "undefined/undefined/".
+  if (!year || !month || !day) return '';
   return `${day}/${month}/${year}`;
 }
 

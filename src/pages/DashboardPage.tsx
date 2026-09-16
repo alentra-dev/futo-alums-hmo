@@ -1,18 +1,20 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight, Banknote, CalendarDays, CheckCircle2, ClipboardCheck, Copy, HeartPulse, Users } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { formatDate, fullName } from '../lib/format';
-import { subscriberEnrollment } from '../lib/enrollmentAccess';
+import { workspaceEnrollment } from '../lib/enrollmentAccess';
 import { assessmentForEnrollment, enrollmentFinancialPosition } from '../lib/financialPosition';
 import { formatNaira } from '../lib/money';
+import { paymentInstruction } from '../lib/paymentInstruction';
 import { FeeBreakdown } from '../components/FeeBreakdown';
 import { surchargeRates } from '../lib/surchargeRates';
 import { Button, PageHeader, ProgressBar, StatusBadge } from '../components/ui';
 
 export function DashboardPage() {
-  const { snapshot, activeEnrollmentId } = useApp();
+  const { snapshot, activeEnrollmentId, actingEnrollmentId } = useApp();
+  const navigate = useNavigate();
   const { payments, paymentAccount, period } = snapshot!;
-  const enrollment = subscriberEnrollment(snapshot!, activeEnrollmentId);
+  const enrollment = workspaceEnrollment(snapshot!, activeEnrollmentId, actingEnrollmentId);
   const relevantPayments = payments.filter((item) => item.enrollmentId === enrollment.id);
   const { assessment, adjustment } = assessmentForEnrollment(enrollment.id, snapshot!.assessments, snapshot!.assessmentAdjustments);
   const financial = enrollmentFinancialPosition(enrollment, relevantPayments, assessment, adjustment);
@@ -23,12 +25,23 @@ export function DashboardPage() {
   const premiumKobo = selectedPlan ? (enrollment.category === 'family' ? selectedPlan.familyPremiumKobo : selectedPlan.individualPremiumKobo) : 0;
   const progress = enrollment.totalKobo ? (verified / enrollment.totalKobo) * 100 : 0;
   const canNotifyPayment = Boolean(enrollment.planId) && ['submitted', 'closed'].includes(enrollment.status) && enrollment.totalKobo > 0;
-  const currentAccount = assessment?.paymentAccount ?? paymentAccount;
+  // One account collects everything, so the next step must name whichever obligation is
+  // actually outstanding and the reference that separates it, not default to the assessment.
+  const premiumOutstanding = canNotifyPayment && position.status === 'underpaid';
+  const assessmentOutstanding = Boolean(assessment) && financial.assessmentOwnDueKobo > 0;
+  const currentInstruction = paymentInstruction(paymentAccount, !premiumOutstanding && assessmentOutstanding ? assessment : undefined);
+  const nextStep = premiumOutstanding
+    ? { title: `${formatNaira(position.underpaymentKobo)} HMO premium outstanding.`, body: `Transfer the balance using the ${paymentAccount.referencePrefix} reference, then upload the confirmation so administrators can verify it.`, to: '/payments', cta: 'Upload confirmation' }
+    : assessmentOutstanding && assessment
+      ? { title: `${formatNaira(financial.assessmentOwnDueKobo)} ${assessment.name} due.`, body: `Use the ${assessment.paymentAccount.referencePrefix} reference. ${formatNaira(assessment.futureCreditKobo)} will be credited toward your ${assessment.creditYear} enrollment when settled.`, to: '/payments', cta: 'View assessment' }
+      : canNotifyPayment
+        ? { title: 'Your payments are up to date.', body: 'Verified payments cover everything currently due. Upload a confirmation for any transfer missing from your history.', to: '/payments', cta: 'View payments' }
+        : { title: 'Finish your enrollment.', body: 'Review your plan and household details, provide consent, and submit your enrollment.', to: '/enrollment', cta: 'Continue enrollment' };
 
-  const copyAccount = () => void navigator.clipboard.writeText(currentAccount.accountNumber);
+  const copyAccount = () => void navigator.clipboard.writeText(currentInstruction.accountNumber);
 
   return <>
-    <PageHeader eyebrow={`${period.year} enrollment`} title={`Welcome, ${enrollment.principal.firstName}`} description={period.status === 'closed' ? 'Enrollment is closed. Your payment records remain available.' : `Enrollment closes ${formatDate(period.endsAt, snapshot!.program.timezone)}.`} actions={assessment || canNotifyPayment ? <Button icon={<Banknote size={18} />} onClick={() => location.assign(import.meta.env.BASE_URL + 'payments')}>{assessment ? 'Pay CAC assessment' : 'Upload payment confirmation'}</Button> : <Button icon={<ClipboardCheck size={18} />} onClick={() => location.assign(import.meta.env.BASE_URL + 'enrollment')}>Continue enrollment</Button>} />
+    <PageHeader eyebrow={`${period.year} enrollment`} title={`Welcome, ${enrollment.principal.firstName}`} description={period.status === 'closed' ? 'Enrollment is closed. Your payment records remain available.' : `Enrollment closes ${formatDate(period.endsAt, snapshot!.program.timezone)}.`} actions={<Button icon={nextStep.to === '/payments' ? <Banknote size={18} /> : <ClipboardCheck size={18} />} onClick={() => navigate(nextStep.to)}>{nextStep.cta}</Button>} />
 
     <section className="metric-grid">
       <article className="metric metric--accent"><span className="metric__icon"><HeartPulse size={21} /></span><div><small>Selected plan</small><strong>{selectedPlan?.name ?? 'Not selected'}</strong><span>{enrollment.category === 'family' ? `${enrollment.dependents.length + 1} covered people` : 'Individual cover'}</span></div></article>
@@ -43,8 +56,9 @@ export function DashboardPage() {
         {premiumKobo > 0 && <FeeBreakdown premiumKobo={premiumKobo} rates={surchargeRates(snapshot!.period)} compact />}
         <ProgressBar value={progress} label={`${formatNaira(verified)} of ${formatNaira(enrollment.totalKobo)}`} />
         <div className="account-strip">
-          <div><small>Pay to</small><strong>{currentAccount.bank}</strong><span>{currentAccount.beneficiary}</span></div>
-          <div><small>Account number</small><strong>{currentAccount.accountNumber}</strong></div>
+          <div><small>Program payment account</small><strong>{currentInstruction.bank}</strong><span>{currentInstruction.beneficiary}</span></div>
+          <div><small>Account number</small><strong>{currentInstruction.accountNumber}</strong></div>
+          <div><small>Reference</small><strong>{currentInstruction.referencePrefix}</strong></div>
           <button title="Copy account number" aria-label="Copy account number" onClick={copyAccount}><Copy size={18} /></button>
         </div>
         <div className="panel__actions"><Link to="/payments">View payments <ArrowRight size={17} /></Link></div>
@@ -62,8 +76,8 @@ export function DashboardPage() {
 
     <section className="next-step-band">
       <ClipboardCheck size={24} />
-      <div><strong>{assessment ? `${formatNaira(financial.assessmentDueKobo)} CAC payment due.` : canNotifyPayment ? 'Upload your payment confirmation.' : 'Finish your enrollment.'}</strong><span>{assessment ? `${formatNaira(assessment.futureCreditKobo)} will be credited toward your ${assessment.creditYear} enrollment when settled.` : canNotifyPayment ? 'After each transfer, upload its confirmation so administrators can verify your payment.' : 'Review your plan and household details, provide consent, and submit your enrollment.'}</span></div>
-      <Link to={assessment || canNotifyPayment ? '/payments' : '/enrollment'}>{assessment ? 'View assessment' : canNotifyPayment ? 'Upload confirmation' : 'Continue enrollment'} <ArrowRight size={18} /></Link>
+      <div><strong>{nextStep.title}</strong><span>{nextStep.body}</span></div>
+      <Link to={nextStep.to}>{nextStep.cta} <ArrowRight size={18} /></Link>
     </section>
   </>;
 }

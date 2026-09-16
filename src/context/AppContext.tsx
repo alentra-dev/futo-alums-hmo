@@ -6,13 +6,17 @@ import { fullName } from '../lib/format';
 import { planTotalKobo, type SurchargeRates } from '../lib/money';
 import { isDemoMode, supabase } from '../lib/supabase';
 import { loadSurchargeRates, surchargeRates, withSurchargeRates } from '../lib/surchargeRates';
-import type { AssessmentAdjustment, Enrollment, EnrollmentPeriod, FinancialAssessment, Payment, PaymentAccount, PaymentInput, PaymentStatus, PlanCategory, ProgramSnapshot, Role } from '../lib/types';
+import type { AssessmentAdjustment, ConsentRecord, Enrollment, EnrollmentPeriod, FinancialAssessment, Payment, PaymentAccount, PaymentInput, PaymentStatus, PlanCategory, ProgramSnapshot, Role } from '../lib/types';
 
 interface AppContextValue {
   snapshot: ProgramSnapshot | null;
   loading: boolean;
   activeEnrollmentId: string;
   setActiveEnrollmentId: (enrollmentId: string) => void;
+  actingEnrollmentId: string;
+  actForSubscriber: (enrollmentId: string) => void;
+  stopActingForSubscriber: () => void;
+  recordOfflineConsent: (enrollmentId: string, note: string, consentedAt: string) => Promise<void>;
   authenticated: boolean;
   demoMode: boolean;
   notice: string | null;
@@ -58,6 +62,16 @@ export async function loadFinancialWorkspace(snapshot: ProgramSnapshot) {
   };
 }
 
+export async function loadConsentRecords(periodId: string): Promise<ConsentRecord[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase.rpc('get_consent_records', { p_period_id: periodId });
+  // Consent provenance is secondary detail on one administrator screen. It must never be
+  // able to blank the portal, including in the window between a frontend deploy and the
+  // migration that creates this function.
+  if (error) return [];
+  return (data ?? []) as ConsentRecord[];
+}
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const initialUrl = useRef(new URL(window.location.href));
   const authCallbackPending = useRef(!isDemoMode && hasAuthCallback(initialUrl.current));
@@ -66,6 +80,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [authenticated, setAuthenticated] = useState(isDemoMode);
   const [loading, setLoading] = useState(!isDemoMode);
   const [notice, setNotice] = useState<string | null>(null);
+  // Acting for a subscriber is deliberately not persisted: it must not survive a reload or
+  // a new tab, so an administrator cannot forget which workspace they are operating in.
+  const [actingEnrollmentId, setActingEnrollmentId] = useState('');
 
   const [authError, setAuthError] = useState<string | null>(isDemoMode ? null : authCallbackError(initialUrl.current));
   const loadLiveSnapshot = useCallback(async () => {
@@ -82,11 +99,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } else {
       const mapped = await loadFinancialWorkspace(mapSnapshot(snapshotResult.data));
       try {
-        const rates = await loadSurchargeRates(mapped.period.id);
+        const [rates, consentRecords] = await Promise.all([
+          loadSurchargeRates(mapped.period.id),
+          loadConsentRecords(mapped.period.id),
+        ]);
         setNotice(null);
         setSnapshot({
           ...mapped,
           period: withSurchargeRates(mapped.period, rates),
+          consentRecords,
           subscriberEnrollmentIds: (enrollmentIdsResult.data ?? []) as string[],
         });
       } catch (reason) {
@@ -186,6 +207,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!isDemoMode && supabase) await supabase.auth.signOut();
     setAuthError(null);
     setNotice(null);
+    setActingEnrollmentId('');
     setAuthenticated(false);
     if (!isDemoMode) setSnapshot(null);
   };
@@ -287,6 +309,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setNotice(status === 'verified' ? 'Payment verified.' : 'Payment rejected.');
   };
 
+  const recordOfflineConsent = async (enrollmentId: string, note: string, consentedAt: string) => {
+    if (!isDemoMode && supabase) {
+      const { error } = await supabase.rpc('record_offline_consent', {
+        p_enrollment_id: enrollmentId,
+        p_note: note,
+        p_consented_at: consentedAt,
+      });
+      if (error) throw error;
+      await loadLiveSnapshot();
+      setNotice('Offline consent recorded against your administrator account.');
+      return;
+    }
+    mutateDemo((current) => ({
+      ...current,
+      enrollments: current.enrollments.map((item) => item.id === enrollmentId ? { ...item, consentedAt } : item),
+      consentRecords: [
+        ...current.consentRecords.filter((item) => item.enrollmentId !== enrollmentId),
+        { enrollmentId, consentedAt, channel: 'offline', note, recordedAt: new Date().toISOString(), recordedBy: current.profile.displayName },
+      ],
+    }));
+    setNotice('Offline consent recorded against your administrator account.');
+  };
+
   const updatePeriod = async (changes: Partial<EnrollmentPeriod>) => {
     if (!isDemoMode && supabase) {
       const { error } = await supabase.rpc('update_enrollment_period', { p_changes: changes });
@@ -349,6 +394,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     snapshot,
     activeEnrollmentId,
     setActiveEnrollmentId,
+    actingEnrollmentId,
+    actForSubscriber: setActingEnrollmentId,
+    stopActingForSubscriber: () => setActingEnrollmentId(''),
+    recordOfflineConsent,
     loading,
     authenticated,
     demoMode: isDemoMode,

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Check, ChevronRight, Globe2, Info, Users } from 'lucide-react';
 import clsx from 'clsx';
 import { useApp } from '../context/AppContext';
-import { subscriberEnrollment } from '../lib/enrollmentAccess';
+import { workspaceEnrollment } from '../lib/enrollmentAccess';
 import { householdValidationMessage, isEnrollmentEditable } from '../lib/subscriberWorkflow';
 import type { PlanCategory, PlanOffering } from '../lib/types';
 import { Button, Modal, PageHeader } from '../components/ui';
@@ -11,8 +11,8 @@ import { surchargeRates } from '../lib/surchargeRates';
 import { formatBasisPoints } from '../lib/money';
 
 export function PlansPage() {
-  const { snapshot, activeEnrollmentId, selectPlan } = useApp();
-  const enrollment = subscriberEnrollment(snapshot!, activeEnrollmentId);
+  const { snapshot, activeEnrollmentId, actingEnrollmentId, selectPlan } = useApp();
+  const enrollment = workspaceEnrollment(snapshot!, activeEnrollmentId, actingEnrollmentId);
   const [category, setCategory] = useState<PlanCategory>(enrollment.category);
   const [selected, setSelected] = useState<PlanOffering | null>(null);
   const [busy, setBusy] = useState('');

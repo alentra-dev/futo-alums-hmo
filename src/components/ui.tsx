@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import { useEffect, useRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import { CheckCircle2, CircleAlert, Clock3, XCircle } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -43,8 +43,18 @@ export function ProgressBar({ value, label }: { value: number; label?: string })
 }
 
 export function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+  const dialog = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKeyDown);
+    // Move focus into the dialog so keyboard and screen-reader users are not left behind it.
+    dialog.current?.querySelector<HTMLElement>('input, select, textarea, button')?.focus();
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
+
   return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-    <section className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <section className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" ref={dialog}>
       <div className="modal__header"><h2 id="modal-title">{title}</h2><IconButton label="Close" onClick={onClose}><XCircle size={21} /></IconButton></div>
       {children}
     </section>

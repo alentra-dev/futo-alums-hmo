@@ -129,6 +129,15 @@ export interface ProgramInfo {
   timezone: string;
 }
 
+export interface ConsentRecord {
+  enrollmentId: string;
+  consentedAt: string;
+  channel: 'portal' | 'offline';
+  note: string | null;
+  recordedAt: string | null;
+  recordedBy: string | null;
+}
+
 export interface ProgramSnapshot {
   program: ProgramInfo;
   profile: UserProfile;
@@ -142,6 +151,7 @@ export interface ProgramSnapshot {
   assessmentAdjustments: AssessmentAdjustment[];
   auditEvents: AuditEvent[];
   hospitalSuggestions: string[];
+  consentRecords: ConsentRecord[];
 }
 
 export interface PaymentInput {

@@ -26,18 +26,29 @@ async function capture(page: Page, testInfo: TestInfo, name: string) {
 
 test('existing subscriber can find and submit multiple payment confirmations', async ({ page, isMobile }, testInfo) => {
   await useSubscriberWorkspace(page);
-  await expect(page.getByRole('button', { name: 'Pay CAC assessment' })).toBeVisible();
-  await expect(page.getByText(/CAC payment due/)).toBeVisible();
+  // One account collects everything, so the outstanding HMO premium must lead while it is
+  // unpaid and each obligation must carry its own transfer reference.
+  await expect(page.getByText(/HMO premium outstanding/)).toBeVisible();
+  await expect(page.locator('.next-step-band').getByRole('link', { name: /Upload confirmation/ })).toBeVisible();
 
   await page.getByRole('link', { name: isMobile ? 'Upload proof' : 'Upload payment' }).click();
   await expect(page.getByRole('heading', { name: 'Payments and confirmations' })).toBeVisible();
   if (isMobile) await expect(page.locator('.mobile-payment-action')).toBeVisible();
   await expect(page.locator('.amount-due').getByRole('button', { name: 'Upload HMO payment' })).toBeVisible();
-  await expect(page.locator('.assessment-panel').getByRole('button', { name: 'Upload CAC payment' })).toBeVisible();
+  await expect(page.locator('.assessment-panel').getByRole('button', { name: 'Pay CAC registration contribution' })).toBeVisible();
+  // The assessment panel must ask only for its own contribution, not the premium shortfall.
+  await expect(page.locator('.assessment-panel')).toContainText('₦33,000.00');
+  await expect(page.locator('.assessment-panel')).toContainText(/HMO premium is short by/);
+  // One account, two references: both must be shown, and they must differ.
+  const references = await page.locator('.transfer-references dd').allInnerTexts();
+  expect(references).toHaveLength(2);
+  expect(references[0]).not.toEqual(references[1]);
+  const accountNumbers = await page.locator('.bank-card .account-number strong').allInnerTexts();
+  expect(accountNumbers).toHaveLength(1);
 
   const upload = async (purpose: 'HMO' | 'CAC', amount: string, fileName: string) => {
     const trigger = purpose === 'CAC'
-      ? page.locator('.assessment-panel').getByRole('button', { name: 'Upload CAC payment' })
+      ? page.locator('.assessment-panel').getByRole('button', { name: 'Pay CAC registration contribution' })
       : page.locator('.amount-due').getByRole('button', { name: 'Upload HMO payment' });
     await trigger.click();
     await expect(page.getByRole('heading', { name: purpose === 'CAC' ? 'Pay CAC registration contribution' : 'Upload HMO payment confirmation' })).toBeVisible();
@@ -57,6 +68,63 @@ test('existing subscriber can find and submit multiple payment confirmations', a
   await capture(page, testInfo, 'subscriber-payments');
 });
 
+test('payment confirmations cannot be dated in the future', async ({ page }) => {
+  await useSubscriberWorkspace(page);
+  await page.goto('/payments');
+  await page.locator('.amount-due').getByRole('button', { name: 'Upload HMO payment' }).click();
+  const paidAt = page.getByLabel('Date paid');
+  const max = await paidAt.getAttribute('max');
+  expect(max).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  await paidAt.evaluate((input) => input.removeAttribute('max'));
+  await paidAt.fill('2999-01-01');
+  await page.getByLabel('Amount shown on confirmation (₦)').fill('1000');
+  await page.locator('input[name="proof"]').setInputFiles({ ...confirmation, name: 'future.png' });
+  await page.getByRole('button', { name: 'Upload confirmation' }).click();
+  await expect(page.getByText('The date paid cannot be in the future.')).toBeVisible();
+});
+
+test('existing subscriber can change plan and submit enrollment while the period is open', async ({ page }, testInfo) => {
+  await useSubscriberWorkspace(page);
+  await page.goto('/plans');
+  await expect(page.getByRole('heading', { name: 'Choose your health plan' })).toBeVisible();
+  const prestige = page.locator('.plan-card').filter({ hasText: 'Prestige Plan' });
+  await prestige.getByRole('button', { name: 'Select plan' }).click();
+  await expect(page.getByText('Plan selection updated.')).toBeVisible();
+  await expect(prestige.getByRole('button', { name: 'Selected' })).toBeDisabled();
+
+  await page.goto('/enrollment');
+  await page.getByLabel('Preferred hospital (optional)').fill('St. David Hospital Owerri');
+  await page.getByRole('button', { name: 'Save progress' }).click();
+  await expect(page.getByText('Enrollment details saved.')).toBeVisible();
+  await page.getByRole('button', { name: 'Submit enrollment' }).click();
+  await expect(page.getByText('Enrollment details saved.')).toBeVisible();
+  await assertViewportIntegrity(page);
+  await capture(page, testInfo, 'subscriber-enrollment-submitted');
+});
+
+test('closing the period makes subscriber enrollment read only', async ({ page, isMobile }) => {
+  // Demo state lives in memory, so the period change must survive in-app navigation only.
+  const navigate = async (name: string) => {
+    if (isMobile) await page.getByLabel('Open navigation').click();
+    await page.getByRole('navigation', { name: 'Primary navigation' }).getByRole('link', { name, exact: true }).click();
+  };
+  await page.goto('/admin/settings');
+  await page.locator('#period select').selectOption('closed');
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.getByRole('button', { name: 'Save period' }).click();
+  await expect(page.getByText('Enrollment period updated.')).toBeVisible();
+
+  await page.getByLabel('Preview role').selectOption('subscriber');
+  await navigate('Enrollment');
+  await expect(page.getByText('This enrollment period is closed. Details remain available as read-only records.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Enrollment closed' })).toBeDisabled();
+  await expect(page.getByLabel('Preferred hospital (optional)')).toBeDisabled();
+
+  await navigate('Plans');
+  await expect(page.getByText('The enrollment period is closed. Plan offerings remain available for reference.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Enrollment closed' }).first()).toBeDisabled();
+});
+
 test('existing subscriber can reach enrollment, plans, history, and account actions', async ({ page, isMobile }, testInfo) => {
   await useSubscriberWorkspace(page);
   const navigate = async (mobileName: string, desktopName = mobileName) => page.getByRole('navigation', { name: isMobile ? 'Mobile navigation' : 'Primary navigation' }).getByRole('link', { name: isMobile ? mobileName : desktopName, exact: true }).click();
@@ -65,15 +133,14 @@ test('existing subscriber can reach enrollment, plans, history, and account acti
   await expect(page.getByRole('heading', { name: 'Choose your health plan' })).toBeVisible();
   await page.getByRole('button', { name: 'View benefits' }).first().click();
   await expect(page.getByRole('dialog')).toBeVisible();
-  await page.getByRole('dialog').locator('.modal__actions').getByRole('button', { name: 'Close' }).click();
-  await expect(page.getByText('The enrollment period is closed. Plan offerings remain available for reference.')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Enrollment closed' }).first()).toBeDisabled();
+  // The dialog must be dismissible from the keyboard, not only by pointer.
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
 
   await navigate('Enrollment');
   await expect(page.getByRole('heading', { name: 'Confirm who is covered' })).toBeVisible();
-  await expect(page.getByText('This enrollment period is closed. Details remain available as read-only records.')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Enrollment closed' })).toBeDisabled();
-  await expect(page.getByLabel('Preferred hospital (optional)')).toBeDisabled();
+  await expect(page.getByLabel('Preferred hospital (optional)')).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Submit enrollment' })).toBeEnabled();
 
   if (isMobile) {
     await page.getByLabel('Open navigation').click();
@@ -103,6 +170,18 @@ test('new subscriber completes the progressive application', async ({ page }, te
 
   await expect(page.getByRole('heading', { name: 'Plan and care preference' })).toBeVisible();
   await page.locator('.join-plan-options label').first().click();
+
+  // Family pricing costs several times the individual premium, so an empty household must
+  // not be able to reach submission.
+  await page.getByRole('button', { name: 'Family', exact: true }).click();
+  await page.getByRole('button', { name: 'Save and continue' }).click();
+  await expect(page.getByRole('heading', { name: 'Family members' })).toBeVisible();
+  await page.getByRole('button', { name: 'Save and continue' }).click();
+  await expect(page.getByText('Add at least one dependent for family coverage.')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Review and submit' })).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Back' }).click();
+  await page.getByRole('button', { name: 'Individual', exact: true }).click();
   await page.getByRole('button', { name: 'Save and continue' }).click();
   await expect(page.getByRole('heading', { name: 'Individual coverage' })).toBeVisible();
   await page.getByRole('button', { name: 'Save and continue' }).click();
@@ -112,6 +191,38 @@ test('new subscriber completes the progressive application', async ({ page }, te
   await expect(page.getByRole('heading', { name: 'Application received' })).toBeVisible();
   await assertViewportIntegrity(page);
   await capture(page, testInfo, 'new-subscriber-complete');
+});
+
+test('administrator completes enrollment and records offline consent for a subscriber', async ({ page, isMobile }, testInfo) => {
+  await page.goto('/admin/enrollees');
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.getByRole('button', { name: 'Act for' }).first().click();
+
+  const banner = page.locator('.acting-banner');
+  await expect(banner).toContainText('You are acting for Ada Nneka Okafor');
+  await expect(banner).toContainText('recorded in the audit history against');
+  await expect(page.getByRole('heading', { name: /Welcome, Ada/ })).toBeVisible();
+
+  // The acting administrator can do the subscriber's work, including changing the plan.
+  await page.getByRole('navigation', { name: isMobile ? 'Mobile navigation' : 'Primary navigation' }).getByRole('link', { name: isMobile ? 'Enrollment' : 'Enrollment', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Confirm who is covered' })).toBeVisible();
+
+  // Consent is recorded, never given on the subscriber's behalf by ticking a box.
+  await expect(page.getByRole('checkbox')).toHaveCount(0);
+  // This subscriber already consented in the portal, and that provenance is shown as such.
+  await expect(page.locator('.offline-consent__done')).toContainText('gave consent in the portal');
+  await page.getByLabel('How consent was received').fill('Signed consent form received by WhatsApp and filed offline.');
+  await page.getByRole('button', { name: 'Record consent' }).click();
+  await expect(page.getByText('Offline consent recorded against your administrator account.')).toBeVisible();
+  await expect(page.locator('.offline-consent__done')).toContainText('Signed consent form received by WhatsApp');
+
+  await assertViewportIntegrity(page);
+  await capture(page, testInfo, 'admin-acting-consent');
+
+  // Leaving acting mode returns the administrator to their own workspace.
+  await banner.getByRole('button', { name: 'Stop acting' }).click();
+  await expect(page.getByRole('heading', { name: 'Enrollees' })).toBeVisible();
+  await expect(page.locator('.acting-banner')).toHaveCount(0);
 });
 
 test('administrator uploads a confirmation and completes payment review', async ({ page }, testInfo) => {
@@ -129,6 +240,13 @@ test('administrator uploads a confirmation and completes payment review', async 
   const card = page.locator('.payment-review-card').filter({ hasText: '₦12,345.67' });
   await expect(card).toBeVisible();
   await expect(card.getByText('admin-upload.png')).toBeVisible();
+
+  // Verifying and rejecting both move a real money position, so each needs confirmation.
+  page.once('dialog', (dialog) => dialog.dismiss());
+  await card.getByRole('button', { name: 'Verify' }).click();
+  await expect(card).toBeVisible();
+
+  page.once('dialog', (dialog) => dialog.accept());
   await card.getByRole('button', { name: 'Verify' }).click();
   await expect(page.getByText('Payment verified.')).toBeVisible();
   await expect(card).not.toBeVisible();
@@ -171,6 +289,7 @@ test('administrator can access and operate administration tools', async ({ page,
   await expect(page.getByText('Surcharge rates and enrollment totals updated.')).toBeVisible();
 
   await page.goto('/admin/access');
+  page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: 'Make admin' }).click();
   await expect(page.getByRole('button', { name: 'Remove admin' })).toHaveCount(2);
 

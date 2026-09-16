@@ -3,6 +3,14 @@ import { nairaToKobo, planTotalKobo } from '../lib/money';
 
 const currentIso = new Date().toISOString();
 
+// The preview period is anchored to the current date. Hardcoded calendar dates silently
+// expire, which turns demo mode into a read-only portal and drops the open-period
+// journeys (plan selection, enrollment edits, submission) out of end-to-end coverage.
+const demoYear = new Date().getUTCFullYear();
+const demoPeriodStart = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString();
+const demoPeriodEnd = new Date(Date.now() + 45 * 24 * 60 * 60 * 1000).toISOString();
+const daysAgo = (days: number) => new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
 export const planOfferings = [
   {
     id: 'plus',
@@ -118,7 +126,7 @@ const principal = {
   gender: 'Female' as const,
   relation: 'FEMALE MEMBER',
   nationality: 'Nigerian',
-  enrollmentDate: '2026-06-05',
+  enrollmentDate: demoPeriodStart.slice(0, 10),
   address: '14 University Road',
   country: 'Nigeria',
   state: 'Imo',
@@ -140,10 +148,10 @@ export const demoSnapshot: ProgramSnapshot = {
   },
   subscriberEnrollmentIds: ['enrollment-ada'],
   period: {
-    id: 'period-2026',
-    year: 2026,
-    startsAt: '2026-06-01T00:00:00+01:00',
-    endsAt: '2026-08-31T23:59:59+01:00',
+    id: `period-${demoYear}`,
+    year: demoYear,
+    startsAt: demoPeriodStart,
+    endsAt: demoPeriodEnd,
     status: 'open',
     nhisFeeBasisPoints: 100,
     programFeeBasisPoints: 200,
@@ -152,7 +160,7 @@ export const demoSnapshot: ProgramSnapshot = {
   enrollments: [
     {
       id: 'enrollment-ada',
-      year: 2026,
+      year: demoYear,
       principal,
       dependents: [
         { ...principal, id: 'person-chidi', memberType: 'Dependent', firstName: 'Chidi', middleName: '', surname: 'Okafor', relation: 'SON', dateOfBirth: '2009-09-12', email: principal.email },
@@ -173,11 +181,11 @@ export const demoSnapshot: ProgramSnapshot = {
       enrollmentId: 'enrollment-ada',
       principalName: 'Ada Okafor',
       amountKobo: nairaToKobo(200_000),
-      paidAt: '2026-07-02',
+      paidAt: daysAgo(30).slice(0, 10),
       reference: 'FUTO HMO - ADA OKAFOR',
       proofName: 'transfer-receipt.pdf',
       status: 'verified',
-      submittedAt: '2026-07-02T14:24:00+01:00',
+      submittedAt: daysAgo(30),
       assessmentId: null,
     },
     {
@@ -185,28 +193,29 @@ export const demoSnapshot: ProgramSnapshot = {
       enrollmentId: 'enrollment-ada',
       principalName: 'Ada Okafor',
       amountKobo: nairaToKobo(85_000),
-      paidAt: '2026-08-08',
+      paidAt: daysAgo(6).slice(0, 10),
       reference: 'FUTO HMO - ADA OKAFOR',
       proofName: 'payment-2.jpg',
       status: 'pending',
-      submittedAt: '2026-08-08T09:12:00+01:00',
+      submittedAt: daysAgo(6),
       assessmentId: null,
     },
   ],
   assessments: [{
-    id: 'assessment-cac-2026',
-    periodId: 'period-2026',
+    id: `assessment-cac-${demoYear}`,
+    periodId: `period-${demoYear}`,
     name: 'CAC registration contribution',
     description: 'One-time CAC registration contribution with a future enrollment credit.',
     amountKobo: nairaToKobo(33_000),
     feePortionKobo: nairaToKobo(15_000),
     futureCreditKobo: nairaToKobo(18_000),
-    creditYear: 2027,
-    dueAt: '2026-09-18T23:59:59+01:00',
+    creditYear: demoYear + 1,
+    dueAt: demoPeriodEnd,
     active: true,
-    paymentAccount: { beneficiary: 'Program Assessment Account', bank: 'Demo Bank', accountNumber: '0000000000', referencePrefix: 'PROGRAM ASSESSMENT' },
+    // Same program account as HMO premiums; only the transfer reference differs.
+    paymentAccount: { beneficiary: 'Program Fund Custodian', bank: 'United Bank for Africa (UBA)', accountNumber: '0000000000', referencePrefix: 'FUTO CAC' },
   }],
-  assessmentAdjustments: [{ assessmentId: 'assessment-cac-2026', enrollmentId: 'enrollment-ada', adjustmentKobo: 0, note: '' }],
+  assessmentAdjustments: [{ assessmentId: `assessment-cac-${demoYear}`, enrollmentId: 'enrollment-ada', adjustmentKobo: 0, note: '' }],
   paymentAccount: {
     beneficiary: 'Program Fund Custodian',
     bank: 'United Bank for Africa (UBA)',
@@ -214,9 +223,12 @@ export const demoSnapshot: ProgramSnapshot = {
     referencePrefix: 'FUTO HMO',
   },
   auditEvents: [
-    { id: 'audit-1', createdAt: '2026-08-08T09:12:00+01:00', actorName: 'Ada Okafor', actorEmail: 'ada.okafor@example.com', action: 'payment.submitted', entityType: 'Payment', summary: 'Submitted a payment notification for Ada Okafor' },
-    { id: 'audit-2', createdAt: '2026-07-02T16:04:00+01:00', actorName: 'Program administrator', actorEmail: 'admin@example.com', action: 'payment.verified', entityType: 'Payment', summary: 'Verified a subscriber payment for Ada Okafor' },
-    { id: 'audit-3', createdAt: '2026-06-05T11:20:00+01:00', actorName: 'Ada Okafor', actorEmail: 'ada.okafor@example.com', action: 'enrollment.submitted', entityType: 'Enrollment', summary: 'Submitted 2026 family enrollment for Ada Okafor' },
+    { id: 'audit-1', createdAt: daysAgo(6), actorName: 'Ada Okafor', actorEmail: 'ada.okafor@example.com', action: 'payment.submitted', entityType: 'Payment', summary: 'Submitted a payment notification for Ada Okafor' },
+    { id: 'audit-2', createdAt: daysAgo(30), actorName: 'Program administrator', actorEmail: 'admin@example.com', action: 'payment.verified', entityType: 'Payment', summary: 'Verified a subscriber payment for Ada Okafor' },
+    { id: 'audit-3', createdAt: daysAgo(44), actorName: 'Ada Okafor', actorEmail: 'ada.okafor@example.com', action: 'enrollment.submitted', entityType: 'Enrollment', summary: `Submitted ${demoYear} family enrollment for Ada Okafor` },
+  ],
+  consentRecords: [
+    { enrollmentId: 'enrollment-ada', consentedAt: currentIso, channel: 'portal', note: null, recordedAt: currentIso, recordedBy: 'Ada Okafor' },
   ],
   hospitalSuggestions: [
     'Federal Medical Centre Owerri',

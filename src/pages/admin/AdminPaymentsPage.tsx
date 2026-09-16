@@ -3,10 +3,12 @@ import { Check, Eye, FileUp, ReceiptText, Search, X } from 'lucide-react';
 import { PaymentSubmissionForm } from '../../components/PaymentSubmissionForm';
 import { Button, EmptyState, Modal, PageHeader, StatusBadge } from '../../components/ui';
 import { useApp } from '../../context/AppContext';
-import { formatDateTime, fullName } from '../../lib/format';
+import { formatDate, formatDateTime, fullName } from '../../lib/format';
 import { assessmentForEnrollment, enrollmentFinancialPosition } from '../../lib/financialPosition';
 import { formatNaira } from '../../lib/money';
+import { paymentInstruction } from '../../lib/paymentInstruction';
 import { isDemoMode, supabase } from '../../lib/supabase';
+import type { Payment } from '../../lib/types';
 
 export function AdminPaymentsPage() {
   const { snapshot, reviewPayment, submitPayment } = useApp();
@@ -23,17 +25,29 @@ export function AdminPaymentsPage() {
   const selectedEnrollment = eligibleEnrollments.find((enrollment) => enrollment.id === selectedEnrollmentId) ?? null;
   const selectedAssignment = selectedEnrollment ? assessmentForEnrollment(selectedEnrollment.id, snapshot!.assessments, snapshot!.assessmentAdjustments) : { assessment: undefined, adjustment: undefined };
   const selectedFinancial = selectedEnrollment ? enrollmentFinancialPosition(selectedEnrollment, snapshot!.payments, selectedAssignment.assessment, selectedAssignment.adjustment) : null;
-  const selectedOutstanding = uploadPurpose === 'assessment' ? selectedFinancial?.assessmentDueKobo ?? 0 : selectedFinancial?.premium.underpaymentKobo ?? 0;
-  const selectedAccount = uploadPurpose === 'assessment' ? selectedAssignment.assessment?.paymentAccount : snapshot!.paymentAccount;
+  const selectedOutstanding = uploadPurpose === 'assessment' ? selectedFinancial?.assessmentOwnDueKobo ?? 0 : selectedFinancial?.premium.underpaymentKobo ?? 0;
+  // One program account collects everything; only the transfer reference distinguishes them.
+  const selectedAccount = uploadPurpose === 'assessment' && !selectedAssignment.assessment
+    ? undefined
+    : paymentInstruction(snapshot!.paymentAccount, uploadPurpose === 'assessment' ? selectedAssignment.assessment : undefined);
 
-  const review = async (id: string, status: 'verified' | 'rejected') => {
-    setBusy(id);
-    try { await reviewPayment(id, status); } finally { setBusy(''); }
+  const review = async (payment: Payment, status: 'verified' | 'rejected') => {
+    // Both outcomes move real money positions, and rejection is not self-service reversible.
+    const verb = status === 'verified' ? 'Verify' : 'Reject';
+    if (!window.confirm(`${verb} the ${formatNaira(payment.amountKobo)} ${payment.assessmentId ? 'program assessment' : 'HMO premium'} confirmation from ${payment.principalName}?`)) return;
+    setBusy(payment.id);
+    try { await reviewPayment(payment.id, status); } finally { setBusy(''); }
   };
   const openUpload = () => {
     setSelectedEnrollmentId(eligibleEnrollments[0]?.id ?? '');
     setUploadPurpose('premium');
     setUploadOpen(true);
+  };
+  const chooseSubscriber = (enrollmentId: string) => {
+    setSelectedEnrollmentId(enrollmentId);
+    // A subscriber who is not assigned to the assessment has no assessment account to pay into.
+    const assigned = assessmentForEnrollment(enrollmentId, snapshot!.assessments, snapshot!.assessmentAdjustments);
+    if (!assigned.assessment) setUploadPurpose('premium');
   };
   const openProof = async (id: string) => {
     if (!supabase) return;
@@ -50,17 +64,17 @@ export function AdminPaymentsPage() {
     {payments.length ? <div className="payment-review-grid">{payments.map((payment) => <article className="payment-review-card" key={payment.id}>
       <div className="payment-review-card__head"><span className="person-dot">{payment.principalName[0]}</span><div><strong>{payment.principalName}</strong><small>{formatDateTime(payment.submittedAt, snapshot!.program.timezone)}</small></div><StatusBadge status={payment.status} /></div>
       <div className="payment-review-card__amount"><small>{payment.assessmentId ? 'Program assessment' : 'HMO premium'}</small><strong>{formatNaira(payment.amountKobo)}</strong></div>
-      <dl><div><dt>Date paid</dt><dd>{payment.paidAt}</dd></div><div><dt>Reference</dt><dd>{payment.reference}</dd></div><div><dt>Confirmation</dt><dd><ReceiptText size={15} />{payment.proofName}</dd></div></dl>
-      <div className="payment-review-card__actions">{payment.proofName !== 'No proof' && <Button variant="secondary" icon={<Eye size={17} />} disabled={isDemoMode} onClick={() => void openProof(payment.id)}>View confirmation</Button>}{payment.status === 'pending' && <><Button variant="danger" icon={<X size={17} />} disabled={busy === payment.id} onClick={() => void review(payment.id, 'rejected')}>Reject</Button><Button icon={<Check size={17} />} disabled={busy === payment.id} onClick={() => void review(payment.id, 'verified')}>Verify</Button></>}</div>
+      <dl><div><dt>Date paid</dt><dd>{formatDate(payment.paidAt, snapshot!.program.timezone)}</dd></div><div><dt>Reference</dt><dd>{payment.reference}</dd></div><div><dt>Confirmation</dt><dd><ReceiptText size={15} />{payment.proofName}</dd></div></dl>
+      <div className="payment-review-card__actions">{payment.proofName !== 'No proof' && <Button variant="secondary" icon={<Eye size={17} />} disabled={isDemoMode} onClick={() => void openProof(payment.id)}>View confirmation</Button>}{payment.status === 'pending' && <><Button variant="danger" icon={<X size={17} />} disabled={busy === payment.id} onClick={() => void review(payment, 'rejected')}>Reject</Button><Button icon={<Check size={17} />} disabled={busy === payment.id} onClick={() => void review(payment, 'verified')}>Verify</Button></>}</div>
     </article>)}</div> : <EmptyState icon={<ReceiptText size={29} />} title="No payments in this queue" body="Payment confirmations matching this filter will appear here." />}
 
     {uploadOpen && <Modal title="Upload for a subscriber" onClose={() => setUploadOpen(false)}>
       <div className="admin-payment-subscriber">
-        <label>Subscriber<select aria-label="Subscriber" value={selectedEnrollmentId} onChange={(event) => setSelectedEnrollmentId(event.target.value)}>{eligibleEnrollments.map((enrollment) => <option key={enrollment.id} value={enrollment.id}>{fullName(enrollment.principal)} - {enrollment.category}</option>)}</select></label>
+        <label>Subscriber<select aria-label="Subscriber" value={selectedEnrollmentId} onChange={(event) => chooseSubscriber(event.target.value)}>{eligibleEnrollments.map((enrollment) => <option key={enrollment.id} value={enrollment.id}>{fullName(enrollment.principal)} - {enrollment.category}</option>)}</select></label>
         {selectedEnrollment && <div><span>{uploadPurpose === 'assessment' ? 'Assessment' : 'HMO'} balance</span><strong>{formatNaira(selectedOutstanding)} due</strong></div>}
         <label>Payment purpose<select aria-label="Payment purpose" value={uploadPurpose} onChange={(event) => setUploadPurpose(event.target.value as typeof uploadPurpose)}><option value="premium">HMO premium</option>{selectedAssignment.assessment && <option value="assessment">{selectedAssignment.assessment.name}</option>}</select></label>
       </div>
-      {selectedEnrollment && selectedAccount && <PaymentSubmissionForm key={`${selectedEnrollment.id}-${uploadPurpose}`} enrollment={selectedEnrollment} account={selectedAccount} outstandingKobo={selectedOutstanding} submitLabel="Upload for review" onCancel={() => setUploadOpen(false)} onSubmit={async (payment) => { await submitPayment({ ...payment, assessmentId: uploadPurpose === 'assessment' ? selectedAssignment.assessment?.id : undefined }); setUploadOpen(false); }} />}
+      {selectedEnrollment && selectedAccount && <PaymentSubmissionForm key={`${selectedEnrollment.id}-${uploadPurpose}`} enrollment={selectedEnrollment} account={selectedAccount} outstandingKobo={selectedOutstanding} timezone={snapshot!.program.timezone} submitLabel="Upload for review" onCancel={() => setUploadOpen(false)} onSubmit={async (payment) => { await submitPayment({ ...payment, assessmentId: uploadPurpose === 'assessment' ? selectedAssignment.assessment?.id : undefined }); setUploadOpen(false); }} />}
     </Modal>}
   </>;
 }

@@ -121,7 +121,7 @@ textarea { resize: vertical; }
 .progress-label strong { color: var(--ink); }
 .progress { height: 8px; background: #e8edea; border-radius: 4px; overflow: hidden; }
 .progress span { height: 100%; display: block; background: var(--green-700); border-radius: inherit; transition: width .25s; }
-.account-strip { display: grid; grid-template-columns: 1.5fr 1fr 40px; gap: 16px; align-items: center; margin-top: 22px; padding: 16px; background: var(--surface-2); border: 1px solid #e5eae7; border-radius: 6px; }
+.account-strip { display: grid; grid-template-columns: 1.4fr 1fr 1fr 40px; gap: 16px; align-items: center; margin-top: 22px; padding: 16px; background: var(--surface-2); border: 1px solid #e5eae7; border-radius: 6px; }
 .account-strip > div { display: flex; flex-direction: column; }
 .account-strip small { color: #77827c; font-size: 10px; }
 .account-strip strong { font-size: 14px; margin: 3px 0; }
@@ -240,6 +240,25 @@ textarea { resize: vertical; }
 .account-number button { background: rgba(255,255,255,.1); color: #fff; }
 .bank-card p { margin: 18px 0 0; padding-top: 14px; border-top: 1px solid rgba(255,255,255,.13); color: #bfd0c7; font-size: 10px; }
 .bank-card b { color: #fff; }
+/* Acting for another person must stay visible and reversible at any scroll position,
+   and must never be covered by a transient toast. */
+.acting-banner { position: sticky; top: 0; z-index: 70; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 11px 16px; background: #5b2d90; color: #fff; font-size: 12px; }
+.app-main--acting .toast { top: 150px; }
+.acting-banner strong { color: #fff; }
+.acting-banner span { flex: 1 1 260px; }
+.acting-banner button { border: 1px solid rgba(255,255,255,.5); background: transparent; color: #fff; border-radius: 5px; padding: 6px 12px; font-size: 11px; font-weight: 600; cursor: pointer; }
+.acting-banner button:hover { background: rgba(255,255,255,.14); }
+.offline-consent { padding: 14px; background: var(--surface-2); border: 1px solid #e5eae7; border-radius: 6px; }
+.offline-consent > p { margin: 0 0 12px; font-size: 12px; color: #4d5852; }
+.offline-consent__done { display: flex; align-items: center; gap: 7px; color: var(--green-700); font-weight: 600; }
+.transfer-references { margin: 10px 0 0; display: grid; gap: 8px; }
+.transfer-references > div { display: flex; flex-direction: column; gap: 2px; }
+.transfer-references dt { color: #96afa2; font-size: 9px; text-transform: uppercase; letter-spacing: .04em; }
+.transfer-references dd { margin: 0; color: #fff; font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
+.inherited-account { display: flex; flex-direction: column; gap: 3px; padding: 12px; background: var(--surface-2); border: 1px solid #e5eae7; border-radius: 6px; }
+.inherited-account small { color: #77827c; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
+.inherited-account strong { font-size: 14px; }
+.inherited-account span { color: #68736d; font-size: 11px; }
 .table-section { margin-top: 24px; }
 .section-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
 .section-title h2 { margin: 0; }
@@ -421,6 +440,8 @@ textarea { resize: vertical; }
   .panel, .form-section { padding: 16px; }
   .account-strip { grid-template-columns: 1fr 38px; }
   .account-strip > div:first-child { grid-column: 1 / -1; }
+  .account-strip > button { grid-column: 2; grid-row: 2; }
+  .account-strip > div:nth-child(3) { grid-column: 1 / -1; grid-row: 3; }
   .next-step-band { align-items: flex-start; flex-wrap: wrap; }
   .next-step-band a { margin-left: 37px; }
   .plan-grid { grid-template-columns: 1fr; }
