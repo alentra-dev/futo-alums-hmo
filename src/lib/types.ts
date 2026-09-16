@@ -93,7 +93,8 @@ export interface FinancialAssessment {
   creditYear: number;
   dueAt: string;
   active: boolean;
-  paymentAccount: PaymentAccount;
+  /** Only the transfer reference is per-assessment; bank details come from the one program account. */
+  referencePrefix: string;
 }
 
 export interface AssessmentAdjustment {

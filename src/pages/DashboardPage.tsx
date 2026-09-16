@@ -33,7 +33,7 @@ export function DashboardPage() {
   const nextStep = premiumOutstanding
     ? { title: `${formatNaira(position.underpaymentKobo)} HMO premium outstanding.`, body: `Transfer the balance using the ${paymentAccount.referencePrefix} reference, then upload the confirmation so administrators can verify it.`, to: '/payments', cta: 'Upload confirmation' }
     : assessmentOutstanding && assessment
-      ? { title: `${formatNaira(financial.assessmentOwnDueKobo)} ${assessment.name} due.`, body: `Use the ${assessment.paymentAccount.referencePrefix} reference. ${formatNaira(assessment.futureCreditKobo)} will be credited toward your ${assessment.creditYear} enrollment when settled.`, to: '/payments', cta: 'View assessment' }
+      ? { title: `${formatNaira(financial.assessmentOwnDueKobo)} ${assessment.name} due.`, body: `Use the ${assessment.referencePrefix} reference. ${formatNaira(assessment.futureCreditKobo)} will be credited toward your ${assessment.creditYear} enrollment when settled.`, to: '/payments', cta: 'View assessment' }
       : canNotifyPayment
         ? { title: 'Your payments are up to date.', body: 'Verified payments cover everything currently due. Upload a confirmation for any transfer missing from your history.', to: '/payments', cta: 'View payments' }
         : { title: 'Finish your enrollment.', body: 'Review your plan and household details, provide consent, and submit your enrollment.', to: '/enrollment', cta: 'Continue enrollment' };

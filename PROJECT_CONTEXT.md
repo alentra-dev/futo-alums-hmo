@@ -1,6 +1,6 @@
 # FUTO Alums HMO Program: Durable Project Context
 
-Last updated: 2026-09-15
+Last updated: 2026-09-16
 
 This document is the persistent handoff for engineers and LLM coding agents working on this repository. Read it before changing the application and update it whenever code, schema, business rules, deployment, configuration, or production operating state changes. `AGENTS.md` makes that maintenance requirement explicit.
 
@@ -165,6 +165,8 @@ The net assessment due for an enrollee is:
 
 The result is floored at zero for collection, while the underlying premium position remains visible. Future credit is a planned amount and should be described to subscribers as becoming available when the assessment is settled. A future enhancement may require a true credit ledger when the next enrollment year opens.
 
+Sweeping the HMO premium variance into the assessment net is the **confirmed long-term accounting treatment** (decided 2026-09-16); it is not provisional and should not be removed without a new decision.
+
 This combined figure is a **reconciliation position, not a payment instruction**. The program collects every payment into **one bank account**; HMO premiums and program assessments are distinguished only by the transfer reference the subscriber puts on the transfer, which is what makes the deposits reconcilable. The subscriber interface must therefore never present the combined net as a single amount to transfer, because the resulting payment would be recorded and referenced as an assessment while part of it is premium. `enrollmentFinancialPosition` also returns:
 
 - `assessmentOwnNetKobo` / `assessmentOwnDueKobo`: `assessment base + admin adjustment - verified assessment payments`, which is what the subscriber transfers under the assessment reference;
@@ -176,7 +178,9 @@ This combined figure is a **reconciliation position, not a payment instruction**
 
 `src/lib/paymentInstruction.ts` composes every payment instruction shown to a user: bank details always come from the single program `paymentAccount`, and only `referencePrefix` varies by purpose. Use it rather than reading an account off an assessment.
 
-`financial_assessments` still carries its own `beneficiary`, `bank`, and `account_number` columns from migration `202609120019`. They are a second copy of the same account and were separately editable in program settings, so they could drift and hand a subscriber a stale account number. The assessment form now edits only the transfer reference, displays the inherited account read-only, rejects a reference that matches the HMO reference, and writes the program account values back on every save so stored rows converge. Removing those columns needs its own migration.
+Migration `202609160021` removed the duplicate `beneficiary`, `bank`, and `account_number` columns from `financial_assessments`; an assessment now contributes only `reference_prefix`. `FinancialAssessment.referencePrefix` replaced the nested `paymentAccount`, so the type system no longer allows an assessment to name a different destination. `upsert_financial_assessment` requires a non-empty reference and rejects one matching the HMO premium reference, because a shared reference would make the two purposes impossible to reconcile apart in one account.
+
+The migration refuses to run if any assessment still holds bank details differing from the program payment account, since dropping columns cannot be undone and divergence would mean the discarded copy was not in fact redundant.
 
 HMO and assessment evidence use distinct, labeled upload actions. Both permit multiple confirmations. The administrator payment-review screen and exports identify the purpose.
 
@@ -243,6 +247,7 @@ Major stages:
 - `202608280018`: optional person fields.
 - `202609120019`: separate financial assessments, enrollment adjustments, assessment-linked payments, workspace/admin/submission RPCs, audit triggers, and finalized 2026 1% + 2% premium fees.
 - `202609150020`: consent provenance columns on `enrollments`, the `sync_consent_provenance` trigger, `record_offline_consent`, and the `get_consent_records` side-car read. Deployed to production 2026-09-16.
+- `202609160021`: dropped the duplicate assessment bank columns, leaving `reference_prefix`, and rebuilt `get_financial_workspace` and `upsert_financial_assessment` around the single program account. Guarded against divergent stored accounts.
 
 When adding a migration, document its purpose here and state whether it has been deployed to production.
 
@@ -372,8 +377,6 @@ Keep `docs/ADMIN_CHEATSHEET.md` aligned whenever an administrator workflow or la
 - Consider further bundle splitting for ExcelJS and charting if mobile load performance becomes a problem.
 - Before a new annual rollover, verify dates, offerings, rates, payment account, assessment status, hospital guidance, email copy, redirect URLs, SMTP, and exports in a non-production or dry-run path.
 - `.env.local` on a developer machine may hold production Supabase credentials, with `VITE_DEMO_MODE=true` as the only thing preventing `npm run dev` from operating on live data. Prefer a separate non-production project for local work, and confirm demo mode before exercising any mutation locally.
-- A follow-up migration should drop `beneficiary`, `bank`, and `account_number` from `financial_assessments` and keep only `reference_prefix`, so the single program account cannot be duplicated in storage at all (§7.3).
-- Open decision: whether sweeping the HMO premium variance into the assessment net (§7.2) is the intended long-term accounting treatment. The interface now keeps the two separately payable under distinct references, but the combined figure is still what administrator reports and exports present.
 - `relation` is free text for principals and dependents. AVON submissions and the family-composition rule (spouse plus up to four children under 21) would both benefit from a constrained vocabulary; dependent ages and relationships are currently unvalidated.
 - `paymentPosition` reports `underpaid`, `paid in full`, and `overpaid`. §7.1 also describes an `unpaid` state for enrollments with no verified payment; it is currently reported as `underpaid`. Splitting it would change exported values, so it needs a deliberate decision.
 - Enrollment edits are held in local component state with no unsaved-changes warning; navigating away discards them.
@@ -388,6 +391,14 @@ Migration `202609150020` adds `consent_channel`, `consent_recorded_by`, `consent
 `loadConsentRecords` degrades to an empty list when the RPC is unavailable. A side-car read for one administrator panel must never be able to blank the portal, including in the window between a frontend deploy and the migration that creates the function.
 
 Deployed 2026-09-16: commit `bcbd45a`, GitHub Pages run `35059123871`, Supabase run `35059126416`. The preview step listed exactly `202609150020` and the apply step reported `Applying migration 202609150020_admin_acting_and_offline_consent.sql` with no other pending migration. Verified afterwards from an unauthenticated client: `get_consent_records` and `record_offline_consent` both return `42501 permission denied for function`, which confirms they exist in production and that anonymous execute is revoked, against a control name that returns `PGRST202` not found.
+
+### 2026-09-16 (assessment reference cleanup)
+
+Confirmed that sweeping the HMO premium variance into the assessment net (§7.2) is the intended long-term accounting treatment, and recorded it as settled rather than provisional.
+
+Migration `202609160021` completes the single-account cleanup: the duplicate `beneficiary`, `bank`, and `account_number` columns are dropped from `financial_assessments`, leaving `reference_prefix` as the only per-assessment payment field. `get_financial_workspace` now returns `referencePrefix`, `upsert_financial_assessment` validates it and rejects one matching the HMO premium reference, and `FinancialAssessment.referencePrefix` replaced the nested `paymentAccount` in the frontend type.
+
+The migration aborts if any stored assessment account still differs from the program payment account, because the drop cannot be undone.
 
 ## 17. Change log for this handoff
 

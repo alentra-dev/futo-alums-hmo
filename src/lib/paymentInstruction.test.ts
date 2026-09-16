@@ -17,17 +17,17 @@ describe('payment instructions', () => {
   it('varies only the transfer reference, which is the reconciliation key', () => {
     const premium = paymentInstruction(account);
     const programAssessment = paymentInstruction(account, assessment);
-    expect(programAssessment.referencePrefix).toBe(assessment.paymentAccount.referencePrefix);
+    expect(programAssessment.referencePrefix).toBe(assessment.referencePrefix);
     expect(programAssessment.referencePrefix).not.toBe(premium.referencePrefix);
   });
 
-  it('ignores a stale account stored on the assessment row', () => {
-    // The assessment table keeps its own account columns; a drifted copy must never be
-    // shown to a subscriber as an alternative destination.
-    const stale = { ...assessment, paymentAccount: { beneficiary: 'Old', bank: 'Old Bank', accountNumber: '1111111111', referencePrefix: 'FUTO CAC' } };
-    const instruction = paymentInstruction(account, stale);
+  it('can only contribute a reference, never an alternative destination', () => {
+    // Migration 202609160021 removed the duplicate account columns, so the type system
+    // no longer lets an assessment name a different bank or account number.
+    const instruction = paymentInstruction(account, { referencePrefix: 'FUTO CAC' });
     expect(instruction.accountNumber).toBe(account.accountNumber);
     expect(instruction.bank).toBe(account.bank);
+    expect(instruction.beneficiary).toBe(account.beneficiary);
     expect(instruction.referencePrefix).toBe('FUTO CAC');
   });
 });

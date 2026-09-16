@@ -21,7 +21,7 @@ export function AdminSettingsPage() {
   const [assessment, setAssessment] = useState<FinancialAssessment>(configuredAssessment ?? {
     id: '', periodId: period.id, name: 'CAC registration contribution', description: '', amountKobo: 0,
     feePortionKobo: 0, futureCreditKobo: 0, creditYear: period.year + 1, dueAt: period.endsAt, active: true,
-    paymentAccount: { beneficiary: '', bank: '', accountNumber: '', referencePrefix: '' },
+    referencePrefix: '',
   });
   const savePeriod = async (event: FormEvent) => { event.preventDefault(); if (snapshot!.period.status !== 'closed' && period.status === 'closed' && !window.confirm('Close this enrollment period? Subscribers will no longer be able to change or submit details.')) return; setSaving('period'); try { await updatePeriod(period); } finally { setSaving(''); } };
   const saveRates = async (event: FormEvent) => { event.preventDefault(); if (!window.confirm('Apply these surcharge rates and recalculate every enrollment total for this year? Existing payment records will be preserved.')) return; setSaving('rates'); try { await updateSurchargeRates(rates); } finally { setSaving(''); } };
@@ -35,7 +35,7 @@ export function AdminSettingsPage() {
       setAssessmentError(`The one-time program fee and future enrollment credit must add up to the ${formatNaira(assessment.amountKobo)} base contribution.`);
       return;
     }
-    if (assessment.paymentAccount.referencePrefix.trim().toUpperCase() === account.referencePrefix.trim().toUpperCase()) {
+    if (assessment.referencePrefix.trim().toUpperCase() === account.referencePrefix.trim().toUpperCase()) {
       setAssessmentError('Use a transfer reference that differs from the HMO premium reference, otherwise the two cannot be reconciled apart.');
       return;
     }
@@ -46,10 +46,8 @@ export function AdminSettingsPage() {
         id: assessment.id || null, periodId: period.id, name: assessment.name, description: assessment.description,
         amountKobo: assessment.amountKobo, feePortionKobo: assessment.feePortionKobo, futureCreditKobo: assessment.futureCreditKobo,
         creditYear: assessment.creditYear, dueAt: assessment.dueAt, active: assessment.active,
-        // The assessment row keeps its own account columns, but the program collects every
-        // payment into one account, so they are written from it rather than edited apart.
-        beneficiary: account.beneficiary, bank: account.bank,
-        accountNumber: account.accountNumber, referencePrefix: assessment.paymentAccount.referencePrefix,
+        // Only the reference is per-assessment; the one program account collects both purposes.
+        referencePrefix: assessment.referencePrefix,
       } });
       if (error) throw error;
       window.location.reload();
@@ -74,7 +72,7 @@ export function AdminSettingsPage() {
             <label>One-time program fee (₦)<input required type="number" min="0" step="0.01" value={assessment.feePortionKobo / 100} onChange={(event) => setAssessment({ ...assessment, feePortionKobo: nairaToKobo(event.target.value) })} /></label>
             <label>Future enrollment credit (₦)<input required type="number" min="0" step="0.01" value={assessment.futureCreditKobo / 100} onChange={(event) => setAssessment({ ...assessment, futureCreditKobo: nairaToKobo(event.target.value) })} /></label>
             <label>Credit enrollment year<input required type="number" min={period.year + 1} max="2100" value={assessment.creditYear} onChange={(event) => setAssessment({ ...assessment, creditYear: Number(event.target.value) })} /></label>
-            <label className="span-2">Transfer reference prefix<input required value={assessment.paymentAccount.referencePrefix} onChange={(event) => setAssessment({ ...assessment, paymentAccount: { ...assessment.paymentAccount, referencePrefix: event.target.value } })} /><small>Assessment payments land in the same program account as HMO premiums. This reference is the only thing that separates them during reconciliation, so it must differ from &ldquo;{account.referencePrefix}&rdquo;.</small></label>
+            <label className="span-2">Transfer reference prefix<input required value={assessment.referencePrefix} onChange={(event) => setAssessment({ ...assessment, referencePrefix: event.target.value })} /><small>Assessment payments land in the same program account as HMO premiums. This reference is the only thing that separates them during reconciliation, so it must differ from &ldquo;{account.referencePrefix}&rdquo;.</small></label>
             <div className="span-2 inherited-account"><small>Collected into</small><strong>{account.bank} · {account.accountNumber}</strong><span>{account.beneficiary} — configured once under HMO payment account below.</span></div>
             <label className="span-2">Subscriber disclosure<textarea required rows={3} value={assessment.description} onChange={(event) => setAssessment({ ...assessment, description: event.target.value })} /></label>
             <label className="checkbox-line span-2"><input type="checkbox" checked={assessment.active} onChange={(event) => setAssessment({ ...assessment, active: event.target.checked })} />Active and visible to assigned subscribers</label>

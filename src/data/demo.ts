@@ -212,8 +212,8 @@ export const demoSnapshot: ProgramSnapshot = {
     creditYear: demoYear + 1,
     dueAt: demoPeriodEnd,
     active: true,
-    // Same program account as HMO premiums; only the transfer reference differs.
-    paymentAccount: { beneficiary: 'Program Fund Custodian', bank: 'United Bank for Africa (UBA)', accountNumber: '0000000000', referencePrefix: 'FUTO CAC' },
+    // Collected into the one program account; only the transfer reference differs.
+    referencePrefix: 'FUTO CAC',
   }],
   assessmentAdjustments: [{ assessmentId: `assessment-cac-${demoYear}`, enrollmentId: 'enrollment-ada', adjustmentKobo: 0, note: '' }],
   paymentAccount: {
