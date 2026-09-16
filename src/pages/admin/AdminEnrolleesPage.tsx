@@ -152,7 +152,8 @@ export function AdminEnrolleesPage() {
       <span>{loadingPeriod ? 'Loading...' : `${rows.length} records`}</span>
     </div>
     {periodError && <p className="form-error" role="alert">{periodError}</p>}
-    {!loadingPeriod && (rows.length ? <div className="data-table admin-table"><div className="data-table__head"><span>Member</span><span>Plan</span><span>Plan type</span><span>Total payable</span><span>Verified paid</span><span>HMO position</span><span>{activeAssessment ? `${activeAssessment.name} net due` : 'Assessment net due'}</span><span>Enrollment</span><span>Manage</span></div>{rows.map((enrollment) => {
+    {activeAssessment && <p className="table-legend">Assessment columns show <strong>{activeAssessment.name}</strong>. Net due also carries any HMO under or overpayment reconciled into it, so it will not always equal payable minus paid.</p>}
+    {!loadingPeriod && (rows.length ? <div className="data-table admin-table"><div className="data-table__head"><span>Member</span><span>Plan</span><span>Plan type</span><span>Total payable</span><span>Verified paid</span><span>HMO position</span><span>Assessment payable</span><span>Assessment paid</span><span>Assessment net due</span><span>Enrollment</span><span>Manage</span></div>{rows.map((enrollment) => {
       const assigned = assessmentForEnrollment(enrollment.id, periodData.assessments, periodData.assessmentAdjustments);
       const financial = enrollmentFinancialPosition(enrollment, periodData.payments, assigned.assessment, assigned.adjustment);
       const variance = financial.premium.status === 'overpaid' ? financial.premium.overpaymentKobo : financial.premium.underpaymentKobo;
@@ -163,7 +164,11 @@ export function AdminEnrolleesPage() {
         <strong data-label="Total payable">{formatNaira(enrollment.totalKobo)}</strong>
         <strong data-label="Verified paid">{formatNaira(financial.premiumPaidKobo)}</strong>
         <span data-label="HMO position"><StatusBadge status={financial.premium.status} /><small>{formatNaira(variance)}</small></span>
-        <strong data-label={activeAssessment ? `${activeAssessment.name} net due` : 'Assessment net due'}>{assigned.assessment ? formatNaira(financial.assessmentDueKobo) : 'Not assigned'}</strong>
+        <strong data-label="Assessment payable" title={assigned.assessment && financial.adjustmentKobo !== 0 ? `${formatNaira(assigned.assessment.amountKobo)} base with a ${formatNaira(financial.adjustmentKobo)} administrator adjustment` : undefined}>{assigned.assessment ? formatNaira(assigned.assessment.amountKobo + financial.adjustmentKobo) : 'Not assigned'}</strong>
+        <strong data-label="Assessment paid">{assigned.assessment ? formatNaira(financial.assessmentPaidKobo) : '—'}</strong>
+        {/* Net due is the reconciliation position: it also carries the swept HMO variance,
+            so it deliberately does not equal payable minus paid. */}
+        <strong data-label="Assessment net due" title={assigned.assessment && financial.premiumVarianceKobo !== 0 ? `${formatNaira(financial.assessmentOwnDueKobo)} assessment balance plus a ${formatNaira(financial.premiumVarianceKobo)} HMO ${financial.premiumVarianceKobo > 0 ? 'underpayment' : 'overpayment'} reconciled into it` : undefined}>{assigned.assessment ? formatNaira(financial.assessmentDueKobo) : '—'}</strong>
         <span data-label="Enrollment"><StatusBadge status={enrollment.status} /></span>
         <span data-label="Manage">{activeAssessment && <Button variant="secondary" icon={<SlidersHorizontal size={15} />} onClick={() => openFinancialAdjustment(enrollment)}>Adjust</Button>}{selectedPeriodId === snapshot!.period.id && <Button variant="secondary" icon={<UserCog size={15} />} onClick={() => beginActingFor(enrollment)}>Act for</Button>}</span>
       </div>;

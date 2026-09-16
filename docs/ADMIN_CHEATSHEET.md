@@ -45,6 +45,7 @@ Do not approve an application merely because the name looks familiar. Resolve ev
 1. Select the **Enrollment year** before reviewing or downloading anything.
 2. Search by member name or email, or filter by enrollment status.
 3. Confirm the member's plan, **Individual/Family** type, household size, HMO total, exact under/overpayment, assessment balance, hospital, and status.
+   - HMO and the assessment each report **payable**, **verified paid**, and a position. Assessment **net due** also carries any HMO under or overpayment reconciled into it, so it will not always equal assessment payable minus assessment paid.
 4. Download the appropriate workbook:
    - **Summary**: principal member, plan/category, HMO payable/verified/position, assessment paid/due, future credit, and status.
    - **Admin full export**: complete enrollment fields plus internal HMO and assessment accounting fields.

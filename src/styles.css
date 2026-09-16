@@ -52,7 +52,7 @@ textarea { resize: vertical; }
 .icon-button { width: 40px; height: 40px; border: 0; border-radius: 5px; background: transparent; color: #52605a; display: grid; place-items: center; flex: 0 0 auto; }
 .icon-button:hover { background: #edf1ee; color: var(--green-700); }
 .text-button { border: 0; padding: 8px 2px; background: transparent; color: var(--green-700); font-weight: 700; display: inline-flex; align-items: center; gap: 3px; }
-.button-row { display: flex; gap: 8px; }
+.button-row { display: flex; gap: 8px; flex-wrap: wrap; }
 
 .brand { height: 54px; display: flex; align-items: center; gap: 11px; }
 .brand__mark { width: 38px; height: 38px; border-radius: 6px; background: var(--green-900); color: var(--gold); display: grid; place-items: center; font: 800 23px 'Manrope'; box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); flex: 0 0 auto; }
@@ -283,7 +283,17 @@ textarea { resize: vertical; }
 .input-icon { position: relative; }
 .input-icon svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #728078; z-index: 1; }
 .input-icon input { padding-left: 40px; }
-.admin-table .data-table__head, .admin-table .data-table__row { grid-template-columns: 1.15fr .6fr .45fr .65fr .65fr .65fr .65fr .55fr .55fr; }
+/* Manage holds two action buttons that cannot shrink below their labels, so it keeps a floor. */
+.admin-table .data-table__head, .admin-table .data-table__row { grid-template-columns: .95fr .55fr .34fr .58fr .58fr .66fr .58fr .58fr .62fr .6fr minmax(86px, .62fr); }
+/* Wrap rather than clip: status text is configurable and column widths are tight here. */
+.admin-table .status { padding: 4px 6px; font-size: 9px; gap: 4px; white-space: normal; }
+/* Status badges cannot shrink, and Manage now carries two actions, so these cells stack
+   rather than clip once the eleven columns are share out. */
+.admin-table .data-table__row > span[data-label="HMO position"] { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
+.admin-table .data-table__row > span[data-label="Manage"] { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.admin-table .data-table__row > span[data-label="Manage"] .button { padding: 6px 9px; font-size: 10px; }
+.table-legend { margin: 0 0 10px; color: #68736d; font-size: 11px; }
+.table-legend strong { color: var(--green-900); }
 .payment-review-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }
 .payment-review-card { padding: 18px; }
 .payment-review-card__head { display: flex; align-items: center; gap: 10px; }
@@ -402,6 +412,14 @@ textarea { resize: vertical; }
   .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .plan-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-dashboard-grid { grid-template-columns: 1fr; }
+  /* Eleven columns stop being readable well before the shared table breakpoint, so the
+     enrollee table drops to labelled cards early rather than squeezing every cell. */
+  .admin-table { border: 0; background: transparent; overflow: visible; display: flex; flex-direction: column; gap: 9px; }
+  .admin-table .data-table__head { display: none; }
+  .admin-table .data-table__row { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; background: #fff; border: 1px solid var(--line); border-radius: 6px; padding: 14px; }
+  .admin-table .data-table__row > span, .admin-table .data-table__row > strong { display: flex; flex-direction: column; align-items: flex-start; }
+  .admin-table .data-table__row > [data-label]::before { content: attr(data-label); color: var(--muted); font-size: 8px; font-weight: 700; text-transform: uppercase; margin-bottom: 3px; }
+  .admin-table .data-table__row > span[data-label="Member"] { grid-column: 1 / -1; }
 }
 
 @media (max-width: 850px) {
@@ -432,7 +450,8 @@ textarea { resize: vertical; }
   .demo-banner { padding-left: 10px; padding-right: 10px; }
   .page-header { align-items: flex-start; flex-direction: column; gap: 14px; }
   .page-header__actions, .page-header__actions > .button, .page-header__actions > .segmented, .button-row { width: 100%; }
-  .button-row .button { flex: 1; min-width: 0; }
+  /* Export labels cannot wrap, so the row wraps instead of squeezing them into a clip. */
+  .button-row .button { flex: 1 1 150px; min-width: 0; }
   .metric-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
   .metric { min-height: 132px; padding: 13px; flex-direction: column; gap: 8px; }
   .metric__icon { width: 31px; height: 31px; }

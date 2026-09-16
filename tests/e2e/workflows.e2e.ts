@@ -263,6 +263,16 @@ test('administrator can access and operate administration tools', async ({ page,
 
   await page.goto('/admin/enrollees');
   await expect(page.getByLabel('Enrollment year')).toBeVisible();
+  // The assessment reports payable/paid/net due, matching the premium trio, and the
+  // eleven-column table must not clip any cell at desktop or mobile width.
+  for (const column of ['Assessment payable', 'Assessment paid', 'Assessment net due']) {
+    await expect(page.locator('.data-table__row').first().locator(`[data-label="${column}"]`)).toBeVisible();
+  }
+  await expect(page.locator('.table-legend')).toContainText('CAC registration contribution');
+  const cells = await page.locator('.admin-table span, .admin-table strong').evaluateAll(
+    (elements) => elements.filter((element) => element.scrollWidth > element.clientWidth + 1).map((element) => element.getAttribute('data-label')));
+  expect(cells).toEqual([]);
+  await assertViewportIntegrity(page);
   for (const name of ['Summary', 'Admin full export', 'AVON export']) {
     const download = page.waitForEvent('download');
     await page.getByRole('button', { name }).click();
