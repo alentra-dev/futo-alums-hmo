@@ -242,7 +242,7 @@ Major stages:
 - `202608260017`: removal of the transaction tax and restoration of the then-current program fee model.
 - `202608280018`: optional person fields.
 - `202609120019`: separate financial assessments, enrollment adjustments, assessment-linked payments, workspace/admin/submission RPCs, audit triggers, and finalized 2026 1% + 2% premium fees.
-- `202609150020`: consent provenance columns on `enrollments`, the `sync_consent_provenance` trigger, `record_offline_consent`, and the `get_consent_records` side-car read. **Not yet deployed to production.**
+- `202609150020`: consent provenance columns on `enrollments`, the `sync_consent_provenance` trigger, `record_offline_consent`, and the `get_consent_records` side-car read. Deployed to production 2026-09-16.
 
 When adding a migration, document its purpose here and state whether it has been deployed to production.
 
@@ -385,7 +385,9 @@ Added the ability for an administrator to complete enrollment tasks for alumni w
 
 Migration `202609150020` adds `consent_channel`, `consent_recorded_by`, `consent_evidence_note`, and `consent_recorded_at` to `enrollments`, the `sync_consent_provenance` trigger, `record_offline_consent`, and `get_consent_records`. Existing consent is backfilled as `portal`.
 
-**This migration has not been applied to production.** It was written without a local PostgreSQL instance available, so it has not been executed anywhere. Apply it through the manually dispatched Supabase workflow and read the migration preview step before allowing the apply step to run.
+`loadConsentRecords` degrades to an empty list when the RPC is unavailable. A side-car read for one administrator panel must never be able to blank the portal, including in the window between a frontend deploy and the migration that creates the function.
+
+Deployed 2026-09-16: commit `bcbd45a`, GitHub Pages run `35059123871`, Supabase run `35059126416`. The preview step listed exactly `202609150020` and the apply step reported `Applying migration 202609150020_admin_acting_and_offline_consent.sql` with no other pending migration. Verified afterwards from an unauthenticated client: `get_consent_records` and `record_offline_consent` both return `42501 permission denied for function`, which confirms they exist in production and that anonymous execute is revoked, against a control name that returns `PGRST202` not found.
 
 ## 17. Change log for this handoff
 
