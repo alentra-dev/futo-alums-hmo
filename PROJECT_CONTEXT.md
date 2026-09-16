@@ -156,17 +156,18 @@ HMO and assessment evidence use distinct, labeled upload actions. Both permit mu
 
 As of 2026-09-15:
 
-- enrollment has concluded and the 2026 period is intended to be closed;
-- six final subscriber enrollments require reconciled plan selections and verified premium totals;
-- exact underpayments and overpayments must remain visible and feed the separate assessment due calculation;
-- one apparent new-subscriber payment was resolved to an existing subscriber account;
-- a spouse captured in an accidental new-application draft must be attached as a dependent to that existing household;
-- one non-renewing 2025 household's hospital preference must seed the correct 2026 enrollee;
-- the current financial-assessment migration must be deployed before the private reconciliation is applied.
+- migration `202609120019` was deployed successfully to production;
+- the matching GitHub Pages build was deployed successfully;
+- the 2026 enrollment period is closed;
+- six distinct final enrollments have the approved plans, categories, and verified HMO totals;
+- the six reconciliation payments total ₦1,577,991.18 and remain individually reportable as exact, underpaid, or overpaid;
+- all six enrollments are assigned to the active program assessment;
+- the payment initially thought to represent a new subscriber is linked to the correct existing account;
+- the spouse from the accidental draft is linked to the existing family enrollment and the draft is resolved as a confirmed duplicate;
+- the required hospital preference was transferred to the renewing enrollee;
+- an independent read-only query verified the period, rates, payments, enrollment statuses, assessment assignments, spouse link, duplicate resolution, and hospital transfer after application.
 
-The production reconciliation is intentionally stored only in ignored `.private/reconcile-2026.ts` because it contains real subscriber mappings and financial details. Run without `--apply` first; it validates all identities and prints a preview. Run with `--apply` only after the schema migration is confirmed in production. Do not move its contents into tracked code, documentation, tests, issues, or commit messages.
-
-After production application, update this section with the exact date, migration status, reconciliation success, period status, and verification counts, but continue to omit identities and private account data.
+The production reconciliation is intentionally stored only in ignored `.private/reconcile-2026.ts` because it contains real subscriber mappings and financial details. It is retained for audit/recovery context and must never be moved into tracked code, documentation, tests, issues, or commit messages.
 
 ## 9. Reporting and exports
 
@@ -348,5 +349,5 @@ Keep `docs/ADMIN_CHEATSHEET.md` aligned whenever an administrator workflow or la
 - Added distinct HMO and assessment payment uploads, including explicit mobile access to both.
 - Expanded internal exports while keeping AVON exports free of internal accounting fields.
 - Added unit and end-to-end regression coverage for the new financial behavior.
-- Prepared an ignored private reconciliation with dry-run validation; production application remains dependent on deployment of migration `202609120019` at the time of writing.
+- Deployed migration `202609120019`, applied the ignored private reconciliation, closed the 2026 period, and independently verified all aggregate results in production.
 - Created this durable handoff and the maintenance rules in `AGENTS.md`.
