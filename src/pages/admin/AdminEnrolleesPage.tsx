@@ -164,11 +164,18 @@ export function AdminEnrolleesPage() {
         <strong data-label="Total payable">{formatNaira(enrollment.totalKobo)}</strong>
         <strong data-label="Verified paid">{formatNaira(financial.premiumPaidKobo)}</strong>
         <span data-label="HMO position"><StatusBadge status={financial.premium.status} /><small>{formatNaira(variance)}</small></span>
-        <strong data-label="Assessment payable" title={assigned.assessment && financial.adjustmentKobo !== 0 ? `${formatNaira(assigned.assessment.amountKobo)} base with a ${formatNaira(financial.adjustmentKobo)} administrator adjustment` : undefined}>{assigned.assessment ? formatNaira(assigned.assessment.amountKobo + financial.adjustmentKobo) : 'Not assigned'}</strong>
+        <span data-label="Assessment payable" className="assessment-net">
+          <strong>{assigned.assessment ? formatNaira(assigned.assessment.amountKobo + financial.adjustmentKobo) : 'Not assigned'}</strong>
+          {assigned.assessment && financial.adjustmentKobo !== 0 && <small>incl. {formatNaira(financial.adjustmentKobo)} adjustment</small>}
+        </span>
         <strong data-label="Assessment paid">{assigned.assessment ? formatNaira(financial.assessmentPaidKobo) : '—'}</strong>
         {/* Net due is the reconciliation position: it also carries the swept HMO variance,
-            so it deliberately does not equal payable minus paid. */}
-        <strong data-label="Assessment net due" title={assigned.assessment && financial.premiumVarianceKobo !== 0 ? `${formatNaira(financial.assessmentOwnDueKobo)} assessment balance plus a ${formatNaira(financial.premiumVarianceKobo)} HMO ${financial.premiumVarianceKobo > 0 ? 'underpayment' : 'overpayment'} reconciled into it` : undefined}>{assigned.assessment ? formatNaira(financial.assessmentDueKobo) : '—'}</strong>
+            so it deliberately does not equal payable minus paid. The breakdown is rendered
+            rather than left to a title, which does not exist on a touch device. */}
+        <span data-label="Assessment net due" className="assessment-net">
+          <strong>{assigned.assessment ? formatNaira(financial.assessmentDueKobo) : '—'}</strong>
+          {assigned.assessment && financial.premiumVarianceKobo !== 0 && <small>incl. {formatNaira(Math.abs(financial.premiumVarianceKobo))} HMO {financial.premiumVarianceKobo > 0 ? 'shortfall' : 'credit'}</small>}
+        </span>
         <span data-label="Enrollment"><StatusBadge status={enrollment.status} /></span>
         <span data-label="Manage">{activeAssessment && <Button variant="secondary" icon={<SlidersHorizontal size={15} />} onClick={() => openFinancialAdjustment(enrollment)}>Adjust</Button>}{selectedPeriodId === snapshot!.period.id && <Button variant="secondary" icon={<UserCog size={15} />} onClick={() => beginActingFor(enrollment)}>Act for</Button>}</span>
       </div>;

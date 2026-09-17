@@ -292,6 +292,8 @@ textarea { resize: vertical; }
 .admin-table .data-table__row > span[data-label="HMO position"] { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
 .admin-table .data-table__row > span[data-label="Manage"] { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .admin-table .data-table__row > span[data-label="Manage"] .button { padding: 6px 9px; font-size: 10px; }
+.admin-table .assessment-net { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.admin-table .assessment-net small { color: var(--muted); font-size: 9px; line-height: 1.3; }
 .table-legend { margin: 0 0 10px; color: #68736d; font-size: 11px; }
 .table-legend strong { color: var(--green-900); }
 .payment-review-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }

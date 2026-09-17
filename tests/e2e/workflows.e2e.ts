@@ -269,6 +269,9 @@ test('administrator can access and operate administration tools', async ({ page,
     await expect(page.locator('.data-table__row').first().locator(`[data-label="${column}"]`)).toBeVisible();
   }
   await expect(page.locator('.table-legend')).toContainText('CAC registration contribution');
+  // The swept HMO variance is rendered, not left to a hover title that touch devices lack.
+  await expect(page.locator('.data-table__row').first().locator('[data-label="Assessment net due"]'))
+    .toContainText('incl. ₦239,246.59 HMO shortfall');
   const cells = await page.locator('.admin-table span, .admin-table strong').evaluateAll(
     (elements) => elements.filter((element) => element.scrollWidth > element.clientWidth + 1).map((element) => element.getAttribute('data-label')));
   expect(cells).toEqual([]);
