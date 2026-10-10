@@ -429,6 +429,8 @@ Validation on 2026-10-10: `npm run check` passed (lint, 74 tests in 16 files, Ty
 
 Final `npm run test:e2e` passed on 2026-10-10: 22 scenarios across desktop and mobile, including sequential typing and blank-input validation. Deployment is pending. Required remaining actions: deploy migration and frontend; apply the approved individual exception from ignored `.private/apply-individual-assessment.ts` (preview by default, rechecks preconditions at apply time); verify prior terms, all payment records, audit events, and the new assignment; update this entry with results. Private scripts and owner-readable preflight/verification records remain ignored; the existing secret key is neither logged nor committed.
 
+The first migration deployment (run `38062183231`) stopped at statement zero with `25P01` because the runner does not implicitly wrap `LOCK TABLE` in a transaction. No schema or data statement ran. The still-unapplied migration now has explicit `BEGIN`/`COMMIT`, and the PostgreSQL regression setup executes top-level statements individually to match deployment behavior. The release is being retried from the dedicated branch before publishing the frontend to `main`.
+
 ### 2026-09-15 (UX, workflow, and reporting review)
 
 A full review of subscriber, new-applicant, administrator, and owner journeys was run against demo mode only. No production read or write occurred; this was verified by inspecting outbound requests across every route plus a payment upload. Fixes applied:

@@ -1,5 +1,6 @@
 -- Assignment terms are snapshots. Program defaults never rewrite existing obligations.
 -- Before production deployment, verify shared defaults against configuration audit history.
+begin;
 lock table public.financial_assessments in share mode;
 alter table public.enrollment_assessments
   add column amount_kobo bigint,
@@ -100,3 +101,5 @@ begin
 end; $$;
 revoke all on function public.get_financial_workspace(uuid) from public,anon;
 grant execute on function public.get_financial_workspace(uuid) to authenticated;
+
+commit;

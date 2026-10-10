@@ -44,7 +44,11 @@ beforeAll(async () => {
     insert into public.enrollment_assessments(assessment_id,enrollment_id,program_id) values('${id(5)}','${id(7)}','${id(1)}'),('${id(16)}','${id(15)}','${id(1)}');
     insert into public.payments values('${id(20)}','${id(7)}','${id(5)}',3300000,'verified');
   `);
-  await db.exec(readFileSync('supabase/migrations/202610100022_individual_assessment_terms.sql', 'utf8'));
+  // Execute top-level statements separately, as the deployment runner does. Sending the
+  // entire file in one query would hide a missing transaction around LOCK TABLE.
+  const migration = readFileSync('supabase/migrations/202610100022_individual_assessment_terms.sql', 'utf8').replace(/--[^\n]*/g, '');
+  const statements = migration.match(/(?:\$\$[\s\S]*?\$\$|'(?:[^']|'')*'|[^;])+;/g) ?? [];
+  for (const statement of statements) await db.exec(statement);
 }, 30_000);
 beforeEach(async () => { await db.exec("begin; select set_config('test.actor','admin',true);"); });
 afterEach(async () => { await db.exec('rollback'); });
