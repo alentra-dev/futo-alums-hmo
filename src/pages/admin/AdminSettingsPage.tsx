@@ -8,6 +8,7 @@ import { Button, PageHeader, StatusBadge } from '../../components/ui';
 import { surchargeRates } from '../../lib/surchargeRates';
 import type { FinancialAssessment } from '../../lib/types';
 import { zonedInputToIso, zonedInputValue } from '../../lib/format';
+import { parseNumericInput } from '../../lib/numericInput';
 
 export function AdminSettingsPage() {
   const { snapshot, updatePeriod, updatePaymentAccount, updateProgramTimezone, updateSurchargeRates } = useApp();
@@ -15,7 +16,13 @@ export function AdminSettingsPage() {
   const [account, setAccount] = useState(snapshot!.paymentAccount);
   const [saving, setSaving] = useState('');
   const [timezone, setTimezone] = useState(snapshot!.program.timezone);
-  const [rates, setRates] = useState(() => surchargeRates(snapshot!.period));
+  const initialRates = surchargeRates(snapshot!.period);
+  const [rateInputs, setRateInputs] = useState(() => ({ nhis: String(initialRates.nhisFeeBasisPoints / 100), program: String(initialRates.programFeeBasisPoints / 100) }));
+  const [ratesError, setRatesError] = useState('');
+  const rates = {
+    nhisFeeBasisPoints: Math.round((parseNumericInput(rateInputs.nhis, { min: 0, max: 100 }) ?? initialRates.nhisFeeBasisPoints / 100) * 100),
+    programFeeBasisPoints: Math.round((parseNumericInput(rateInputs.program, { min: 0, max: 100 }) ?? initialRates.programFeeBasisPoints / 100) * 100),
+  };
   const [assessmentError, setAssessmentError] = useState('');
   const configuredAssessment = snapshot!.assessments.find((item) => item.active) ?? snapshot!.assessments[0];
   const [assessment, setAssessment] = useState<FinancialAssessment>(configuredAssessment ?? {
@@ -23,16 +30,42 @@ export function AdminSettingsPage() {
     feePortionKobo: 0, futureCreditKobo: 0, creditYear: period.year + 1, dueAt: period.endsAt, active: true,
     referencePrefix: '',
   });
+  const [assessmentInputs, setAssessmentInputs] = useState(() => ({
+    contribution: String(assessment.amountKobo / 100), fee: String(assessment.feePortionKobo / 100),
+    credit: String(assessment.futureCreditKobo / 100), year: String(assessment.creditYear),
+  }));
   const savePeriod = async (event: FormEvent) => { event.preventDefault(); if (snapshot!.period.status !== 'closed' && period.status === 'closed' && !window.confirm('Close this enrollment period? Subscribers will no longer be able to change or submit details.')) return; setSaving('period'); try { await updatePeriod(period); } finally { setSaving(''); } };
-  const saveRates = async (event: FormEvent) => { event.preventDefault(); if (!window.confirm('Apply these surcharge rates and recalculate every enrollment total for this year? Existing payment records will be preserved.')) return; setSaving('rates'); try { await updateSurchargeRates(rates); } finally { setSaving(''); } };
+  const saveRates = async (event: FormEvent) => {
+    event.preventDefault();
+    if (parseNumericInput(rateInputs.nhis, { min: 0, max: 100 }) === null || parseNumericInput(rateInputs.program, { min: 0, max: 100 }) === null) {
+      setRatesError('Enter both fee rates between 0 and 100. Use 0 explicitly for no fee.');
+      return;
+    }
+    setRatesError('');
+    if (!window.confirm('Apply these surcharge rates and recalculate every enrollment total for this year? Existing payment records will be preserved.')) return;
+    setSaving('rates');
+    try { await updateSurchargeRates(rates); } finally { setSaving(''); }
+  };
   const saveTimezone = async (event: FormEvent) => { event.preventDefault(); setSaving('timezone'); try { await updateProgramTimezone(timezone); } finally { setSaving(''); } };
   const saveAccount = async (event: FormEvent) => { event.preventDefault(); setSaving('account'); try { await updatePaymentAccount(account); } finally { setSaving(''); } };
   const createNextYear = async () => { if (!supabase || isDemoMode) return; setSaving('next'); const nextYear = period.year + 1; const { error } = await supabase.rpc('create_next_enrollment_year', { p_source_period_id: period.id, p_year: nextYear, p_starts_at: `${nextYear}-06-01T00:00:00+01:00`, p_ends_at: `${nextYear}-08-31T23:59:59+01:00` }); setSaving(''); if (error) window.alert(error.message); else window.location.reload(); };
   const saveAssessment = async (event: FormEvent) => {
     event.preventDefault();
-    if (!supabase || isDemoMode) return;
-    if (assessment.feePortionKobo + assessment.futureCreditKobo !== assessment.amountKobo) {
-      setAssessmentError(`The one-time program fee and future enrollment credit must add up to the ${formatNaira(assessment.amountKobo)} base contribution.`);
+    const contribution = parseNumericInput(assessmentInputs.contribution, { min: 0 });
+    const fee = parseNumericInput(assessmentInputs.fee, { min: 0 });
+    const credit = parseNumericInput(assessmentInputs.credit, { min: 0 });
+    const year = parseNumericInput(assessmentInputs.year, { min: period.year + 1, max: 2100, integer: true });
+    if (contribution === null || fee === null || credit === null || year === null) {
+      setAssessmentError('Enter every assessment amount and a valid future credit year. Use 0 explicitly for no fee or credit.');
+      return;
+    }
+    const savedAssessment = { ...assessment, amountKobo: nairaToKobo(contribution), feePortionKobo: nairaToKobo(fee), futureCreditKobo: nairaToKobo(credit), creditYear: year };
+    if (![savedAssessment.amountKobo, savedAssessment.feePortionKobo, savedAssessment.futureCreditKobo].every(Number.isSafeInteger)) {
+      setAssessmentError('Enter assessment amounts within the supported range.');
+      return;
+    }
+    if (savedAssessment.feePortionKobo + savedAssessment.futureCreditKobo !== savedAssessment.amountKobo) {
+      setAssessmentError(`The one-time program fee and future enrollment credit must add up to the ${formatNaira(savedAssessment.amountKobo)} base contribution.`);
       return;
     }
     if (assessment.referencePrefix.trim().toUpperCase() === account.referencePrefix.trim().toUpperCase()) {
@@ -40,12 +73,13 @@ export function AdminSettingsPage() {
       return;
     }
     setAssessmentError('');
+    if (!supabase || isDemoMode) return;
     setSaving('assessment');
     try {
       const { error } = await supabase.rpc('upsert_financial_assessment', { p_assessment: {
         id: assessment.id || null, periodId: period.id, name: assessment.name, description: assessment.description,
-        amountKobo: assessment.amountKobo, feePortionKobo: assessment.feePortionKobo, futureCreditKobo: assessment.futureCreditKobo,
-        creditYear: assessment.creditYear, dueAt: assessment.dueAt, active: assessment.active,
+        amountKobo: savedAssessment.amountKobo, feePortionKobo: savedAssessment.feePortionKobo, futureCreditKobo: savedAssessment.futureCreditKobo,
+        creditYear: savedAssessment.creditYear, dueAt: assessment.dueAt, active: assessment.active,
         // Only the reference is per-assessment; the one program account collects both purposes.
         referencePrefix: assessment.referencePrefix,
       } });
@@ -62,23 +96,23 @@ export function AdminSettingsPage() {
       <section className="settings-nav panel"><a href="#timezone"><Clock3 size={18} />Time zone</a><a href="#surcharges"><Percent size={18} />Surcharges</a><a href="#assessment"><Landmark size={18} />Program assessment</a><a href="#period"><CalendarRange size={18} />Enrollment period</a><a href="#offerings"><Settings2 size={18} />Plan offerings</a><a href="#payment-account"><Banknote size={18} />HMO payment account</a><a href="#access"><LockKeyhole size={18} />Access control</a></section>
       <div className="settings-content">
         <form id="timezone" className="form-section" onSubmit={saveTimezone}><div className="section-heading"><span><Clock3 size={20} /></span><div><h2>Program time zone</h2><p>All deadlines, activity, and reports use this time zone.</p></div></div><label>Time zone<select value={timezone} onChange={(event) => setTimezone(event.target.value)}><option value="Africa/Lagos">Africa/Lagos (WAT)</option><option value="Europe/London">Europe/London</option><option value="America/New_York">America/New_York</option><option value="America/Chicago">America/Chicago</option><option value="America/Los_Angeles">America/Los_Angeles</option><option value="Asia/Dubai">Asia/Dubai</option></select></label><div className="form-actions"><Button disabled={saving === 'timezone'} icon={<Check size={17} />}>{saving === 'timezone' ? 'Saving…' : 'Save time zone'}</Button></div></form>
-        <form id="surcharges" className="form-section" onSubmit={saveRates}><div className="section-heading"><span><Percent size={20} /></span><div><h2>{period.year} surcharge rates</h2><p>Rates apply to this enrollment year. Saving recalculates totals and outstanding balances without changing payment records.</p></div></div><div className="form-grid surcharge-rate-grid"><label>AVON NHIS fee (%)<input required type="number" min="0" max="100" step="0.01" value={rates.nhisFeeBasisPoints / 100} onChange={(event) => setRates({ ...rates, nhisFeeBasisPoints: Math.round(Number(event.target.value) * 100) })} /></label><label>Program administrative fee (%)<input required type="number" min="0" max="100" step="0.01" value={rates.programFeeBasisPoints / 100} onChange={(event) => setRates({ ...rates, programFeeBasisPoints: Math.round(Number(event.target.value) * 100) })} /></label></div><div className="form-actions"><Button disabled={saving === 'rates'} icon={<Check size={17} />}>{saving === 'rates' ? 'Saving…' : 'Save surcharge rates'}</Button></div></form>
+        <form id="surcharges" className="form-section" onSubmit={saveRates}><div className="section-heading"><span><Percent size={20} /></span><div><h2>{period.year} surcharge rates</h2><p>Rates apply to this enrollment year. Saving recalculates totals and outstanding balances without changing payment records.</p></div></div><div className="form-grid surcharge-rate-grid"><label>AVON NHIS fee (%)<input required type="number" min="0" max="100" step="0.01" value={rateInputs.nhis} onChange={(event) => setRateInputs({ ...rateInputs, nhis: event.target.value })} /></label><label>Program administrative fee (%)<input required type="number" min="0" max="100" step="0.01" value={rateInputs.program} onChange={(event) => setRateInputs({ ...rateInputs, program: event.target.value })} /></label></div>{ratesError && <p className="form-error" role="alert">{ratesError}</p>}<div className="form-actions"><Button disabled={saving === 'rates'} icon={<Check size={17} />}>{saving === 'rates' ? 'Saving…' : 'Save surcharge rates'}</Button></div></form>
         <form id="period" className="form-section" onSubmit={savePeriod}><div className="section-heading"><span><CalendarRange size={20} /></span><div><h2>Enrollment period</h2><p>Dates use {snapshot!.program.timezone} time.</p></div></div><div className="form-grid"><label>Coverage year<input type="number" readOnly value={period.year} /></label><label>Status<select value={period.status} onChange={(e) => setPeriod({ ...period, status: e.target.value as typeof period.status })}><option value="scheduled">Scheduled</option><option value="open">Open</option><option value="closed">Closed</option></select></label><label>Opens<input type="datetime-local" value={zonedInputValue(period.startsAt, snapshot!.program.timezone)} onChange={(e) => setPeriod({ ...period, startsAt: zonedInputToIso(e.target.value, snapshot!.program.timezone) })} /></label><label>Closes<input type="datetime-local" value={zonedInputValue(period.endsAt, snapshot!.program.timezone)} onChange={(e) => setPeriod({ ...period, endsAt: zonedInputToIso(e.target.value, snapshot!.program.timezone) })} /></label><label className="span-2">Extension or closure note<textarea rows={2} value={period.extensionNote ?? ''} onChange={(e) => setPeriod({ ...period, extensionNote: e.target.value })} /></label></div><div className="form-actions"><Button disabled={saving === 'period'} icon={<Check size={17} />}>{saving === 'period' ? 'Saving…' : 'Save period'}</Button></div></form>
-        <form id="assessment" className="form-section" onSubmit={saveAssessment}><div className="section-heading"><span><Landmark size={20} /></span><div><h2>Program assessment</h2><p>Configure a separate one-time assessment, the transfer reference that identifies its payments, and the credit carried into a future enrollment year.</p></div></div>
+        <form id="assessment" className="form-section" onSubmit={saveAssessment}><div className="section-heading"><span><Landmark size={20} /></span><div><h2>Program assessment</h2><p>Contribution, fee, and credit amounts are defaults for new assignments. Existing subscribers keep their assigned amounts. Use Enrollees → Adjust to change one subscriber. Names, disclosures, due dates, references, and visibility remain shared.</p></div></div>
           <div className="form-grid">
             <label>Assessment name<input required value={assessment.name} onChange={(event) => setAssessment({ ...assessment, name: event.target.value })} /></label>
             <label>Due date and time<input required type="datetime-local" value={zonedInputValue(assessment.dueAt, snapshot!.program.timezone)} onChange={(event) => setAssessment({ ...assessment, dueAt: zonedInputToIso(event.target.value, snapshot!.program.timezone) })} /></label>
-            <label>Base contribution (₦)<input required type="number" min="0" step="0.01" value={assessment.amountKobo / 100} onChange={(event) => setAssessment({ ...assessment, amountKobo: nairaToKobo(event.target.value) })} /></label>
-            <label>One-time program fee (₦)<input required type="number" min="0" step="0.01" value={assessment.feePortionKobo / 100} onChange={(event) => setAssessment({ ...assessment, feePortionKobo: nairaToKobo(event.target.value) })} /></label>
-            <label>Future enrollment credit (₦)<input required type="number" min="0" step="0.01" value={assessment.futureCreditKobo / 100} onChange={(event) => setAssessment({ ...assessment, futureCreditKobo: nairaToKobo(event.target.value) })} /></label>
-            <label>Credit enrollment year<input required type="number" min={period.year + 1} max="2100" value={assessment.creditYear} onChange={(event) => setAssessment({ ...assessment, creditYear: Number(event.target.value) })} /></label>
+            <label>Base contribution (₦)<input required type="number" min="0" step="0.01" value={assessmentInputs.contribution} onChange={(event) => setAssessmentInputs({ ...assessmentInputs, contribution: event.target.value })} /></label>
+            <label>One-time program fee (₦)<input required type="number" min="0" step="0.01" value={assessmentInputs.fee} onChange={(event) => setAssessmentInputs({ ...assessmentInputs, fee: event.target.value })} /></label>
+            <label>Future enrollment credit (₦)<input required type="number" min="0" step="0.01" value={assessmentInputs.credit} onChange={(event) => setAssessmentInputs({ ...assessmentInputs, credit: event.target.value })} /></label>
+            <label>Credit enrollment year<input required type="number" min={period.year + 1} max="2100" value={assessmentInputs.year} onChange={(event) => setAssessmentInputs({ ...assessmentInputs, year: event.target.value })} /></label>
             <label className="span-2">Transfer reference prefix<input required value={assessment.referencePrefix} onChange={(event) => setAssessment({ ...assessment, referencePrefix: event.target.value })} /><small>Assessment payments land in the same program account as HMO premiums. This reference is the only thing that separates them during reconciliation, so it must differ from &ldquo;{account.referencePrefix}&rdquo;.</small></label>
             <div className="span-2 inherited-account"><small>Collected into</small><strong>{account.bank} · {account.accountNumber}</strong><span>{account.beneficiary} — configured once under HMO payment account below.</span></div>
             <label className="span-2">Subscriber disclosure<textarea required rows={3} value={assessment.description} onChange={(event) => setAssessment({ ...assessment, description: event.target.value })} /></label>
             <label className="checkbox-line span-2"><input type="checkbox" checked={assessment.active} onChange={(event) => setAssessment({ ...assessment, active: event.target.checked })} />Active and visible to assigned subscribers</label>
           </div>{assessmentError && <p className="form-error" role="alert">{assessmentError}</p>}<div className="form-actions"><Button disabled={isDemoMode || saving === 'assessment'} icon={<Check size={17} />}>{saving === 'assessment' ? 'Saving…' : 'Save program assessment'}</Button></div></form>
         <section id="offerings" className="form-section"><div className="section-heading"><span><Settings2 size={20} /></span><div><h2>{period.year} plan offerings</h2><p>Totals use the surcharge rates configured above. Current-year prices are preserved when a new period is created.</p></div></div><div className="settings-plan-list">{snapshot!.plans.map((plan) => <div key={plan.id}><span><strong>{plan.name}</strong><small>{plan.region}</small></span><span><small>Individual total</small><strong>{formatNaira(planTotalKobo(plan.individualPremiumKobo, rates))}</strong></span><span><small>Family total</small><strong>{formatNaira(planTotalKobo(plan.familyPremiumKobo, rates))}</strong></span><StatusBadge status={plan.active ? 'Active' : 'Inactive'} /></div>)}</div><div className="form-actions"><Button variant="secondary" icon={<CopyPlus size={17} />} disabled={isDemoMode || saving === 'next'} onClick={() => void createNextYear()}>{saving === 'next' ? 'Creating…' : 'Create next enrollment year'}</Button></div></section>
-        <form id="payment-account" className="form-section" onSubmit={saveAccount}><div className="section-heading"><span><Banknote size={20} /></span><div><h2>HMO payment account</h2><p>This account is used only for HMO premium payments. Program assessments can use their own account above.</p></div></div><div className="form-grid"><label>Account name<input required value={account.beneficiary} onChange={(e) => setAccount({ ...account, beneficiary: e.target.value })} /></label><label>Bank<input required value={account.bank} onChange={(e) => setAccount({ ...account, bank: e.target.value })} /></label><label>Account number<input required inputMode="numeric" pattern="[0-9]{10}" value={account.accountNumber} onChange={(e) => setAccount({ ...account, accountNumber: e.target.value.replace(/\D/g, '').slice(0, 10) })} /></label><label>Reference prefix<input required value={account.referencePrefix} onChange={(e) => setAccount({ ...account, referencePrefix: e.target.value })} /></label></div><div className="form-actions"><Button disabled={saving === 'account'} icon={<Check size={17} />}>{saving === 'account' ? 'Saving…' : 'Save HMO payment account'}</Button></div></form>
+        <form id="payment-account" className="form-section" onSubmit={saveAccount}><div className="section-heading"><span><Banknote size={20} /></span><div><h2>HMO payment account</h2><p>Every HMO premium and program assessment is collected into this one account, with separate transfer references.</p></div></div><div className="form-grid"><label>Account name<input required value={account.beneficiary} onChange={(e) => setAccount({ ...account, beneficiary: e.target.value })} /></label><label>Bank<input required value={account.bank} onChange={(e) => setAccount({ ...account, bank: e.target.value })} /></label><label>Account number<input required inputMode="numeric" pattern="[0-9]{10}" value={account.accountNumber} onChange={(e) => setAccount({ ...account, accountNumber: e.target.value.replace(/\D/g, '').slice(0, 10) })} /></label><label>Reference prefix<input required value={account.referencePrefix} onChange={(e) => setAccount({ ...account, referencePrefix: e.target.value })} /></label></div><div className="form-actions"><Button disabled={saving === 'account'} icon={<Check size={17} />}>{saving === 'account' ? 'Saving…' : 'Save HMO payment account'}</Button></div></form>
         <section id="access" className="form-section"><div className="section-heading"><span><LockKeyhole size={20} /></span><div><h2>Access control</h2><p>Only the owner can change administrator access.</p></div></div><p>Administrator and owner accounts are listed, promoted, and demoted on the dedicated access page so this screen never shows a stale copy of who holds access.</p><div className="form-actions"><Link className="button button--secondary" to="/admin/access">Manage administrators</Link></div></section>
       </div>
     </div>

@@ -18,6 +18,8 @@ export function PaymentsPage() {
   const enrollment = workspaceEnrollment(snapshot!, activeEnrollmentId, actingEnrollmentId);
   const account = snapshot!.paymentAccount;
   const { assessment, adjustment } = assessmentForEnrollment(enrollment.id, snapshot!.assessments, snapshot!.assessmentAdjustments);
+  const defaults = snapshot!.assessments.find((item) => item.id === assessment?.id);
+  const usesDefaultTerms = assessment && defaults && assessment.amountKobo === defaults.amountKobo && assessment.feePortionKobo === defaults.feePortionKobo && assessment.futureCreditKobo === defaults.futureCreditKobo && assessment.creditYear === defaults.creditYear;
   const financial = enrollmentFinancialPosition(enrollment, snapshot!.payments, assessment, adjustment);
   const selectedPlan = snapshot!.plans.find((plan) => plan.id === enrollment.planId);
   const premiumKobo = selectedPlan ? (enrollment.category === 'family' ? selectedPlan.familyPremiumKobo : selectedPlan.individualPremiumKobo) : 0;
@@ -60,14 +62,16 @@ export function PaymentsPage() {
       </article>
     {assessment && <section className="panel assessment-panel">
       <div className="panel__heading"><div><p className="eyebrow">Current program assessment</p><h2>{assessment.name}</h2></div><StatusBadge status={financial.assessmentOwnDueKobo > 0 ? 'Underpaid' : 'Paid in full'} /></div>
-      <p>{assessment.description}</p>
+      <p>{usesDefaultTerms ? assessment.description : "Individual contribution and credit terms have been assigned to your enrollment."}</p>
       <div className="assessment-figures">
         <span><small>Base contribution</small><strong>{formatNaira(assessment.amountKobo)}</strong></span>
+        <span><small>One-time program fee</small><strong>{formatNaira(assessment.feePortionKobo)}</strong></span>
         {financial.adjustmentKobo !== 0 && <span><small>Admin adjustment</small><strong>{formatNaira(financial.adjustmentKobo)}</strong></span>}
         <span><small>Assessment payments verified</small><strong>{formatNaira(financial.assessmentPaidKobo)}</strong></span>
         <span><small>To pay now</small><strong>{formatNaira(financial.assessmentOwnDueKobo)}</strong></span>
         <span><small>{assessment.creditYear} enrollment credit</small><strong>{formatNaira(assessment.futureCreditKobo)}</strong></span>
       </div>
+      <p>{assessment.futureCreditKobo > 0 ? `The ${formatNaira(assessment.futureCreditKobo)} credit becomes available for ${assessment.creditYear} enrollment when your combined reconciliation position is settled.` : 'Your contribution is a one-time fee. No future enrollment credit is included.'}</p>
       <p className="pending-note"><Info size={16} />Use the reference <b>{assessmentInstruction.referencePrefix}</b> for this transfer so it is not reconciled as an HMO premium payment.</p>
       {financial.premiumVarianceKobo !== 0 && <p className="pending-note"><Info size={16} />{financial.premiumVarianceKobo > 0
         ? <>Your HMO premium is short by {formatNaira(financial.premiumVarianceKobo)}. Send that as a separate transfer using the <b>{premiumInstruction.referencePrefix}</b> reference — it is reconciled against this assessment, so your combined outstanding position is {formatNaira(financial.assessmentDueKobo)}.</>

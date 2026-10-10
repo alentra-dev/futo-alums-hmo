@@ -48,10 +48,14 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
     document.addEventListener('keydown', onKeyDown);
-    // Move focus into the dialog so keyboard and screen-reader users are not left behind it.
-    dialog.current?.querySelector<HTMLElement>('input, select, textarea, button')?.focus();
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [onClose]);
+
+  useEffect(() => {
+    // Focus on opening only. Inline onClose callbacks change on every parent render;
+    // tying focus to them steals it from the field after each keystroke.
+    dialog.current?.querySelector<HTMLElement>('input, select, textarea, button')?.focus();
+  }, []);
 
   return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
     <section className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" ref={dialog}>

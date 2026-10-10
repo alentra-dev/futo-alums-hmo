@@ -34,6 +34,7 @@ interface AppContextValue {
   updatePaymentAccount: (account: PaymentAccount) => Promise<void>;
   updateProgramTimezone: (timezone: string) => Promise<void>;
   updateSurchargeRates: (rates: SurchargeRates) => Promise<void>;
+  updateAssessmentAssignment: (assignment: AssessmentAdjustment, included: boolean) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -390,6 +391,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setNotice('Surcharge rates and enrollment totals updated.');
   };
 
+  const updateAssessmentAssignment = async (assignment: AssessmentAdjustment, included: boolean) => {
+    if (!isDemoMode && supabase) {
+      const { error } = included
+        ? await supabase.rpc('set_enrollment_assessment_terms', {
+          p_assessment_id: assignment.assessmentId, p_enrollment_id: assignment.enrollmentId,
+          p_amount_kobo: assignment.amountKobo, p_fee_portion_kobo: assignment.feePortionKobo,
+          p_future_credit_kobo: assignment.futureCreditKobo, p_credit_year: assignment.creditYear,
+          p_adjustment_kobo: assignment.adjustmentKobo, p_note: assignment.note,
+        })
+        : await supabase.rpc('set_enrollment_assessment', {
+          p_assessment_id: assignment.assessmentId, p_enrollment_id: assignment.enrollmentId,
+          p_included: false, p_adjustment_kobo: 0, p_note: assignment.note,
+        });
+      if (error) throw error;
+    }
+    // Update the shared workspace too, so acting-for and payment screens see the saved terms.
+    setSnapshot((current) => current ? {
+      ...current,
+      assessmentAdjustments: [
+        ...current.assessmentAdjustments.filter((item) => item.assessmentId !== assignment.assessmentId || item.enrollmentId !== assignment.enrollmentId),
+        ...(included ? [assignment] : []),
+      ],
+    } : current);
+  };
+
   const value: AppContextValue = {
     snapshot,
     activeEnrollmentId,
@@ -416,6 +442,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     updatePaymentAccount,
     updateProgramTimezone,
     updateSurchargeRates,
+    updateAssessmentAssignment,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

@@ -1,6 +1,6 @@
 # FUTO Alums HMO Program: Durable Project Context
 
-Last updated: 2026-09-16
+Last updated: 2026-10-10
 
 This document is the persistent handoff for engineers and LLM coding agents working on this repository. Read it before changing the application and update it whenever code, schema, business rules, deployment, configuration, or production operating state changes. `AGENTS.md` makes that maintenance requirement explicit.
 
@@ -153,15 +153,20 @@ Program assessments are separate from HMO premiums. They have their own:
 - future-enrollment credit portion and credit year;
 - due date;
 - active state;
-- payment account and transfer-reference prefix;
+- the shared program payment account and an assessment-specific transfer-reference prefix;
 - per-enrollment inclusion, signed adjustment, and note;
+- per-enrollment snapshots of contribution, retained fee, future credit, and credit year; program amounts are defaults for new assignments, not live overrides of existing terms;
 - payment records linked through `payments.assessment_id`.
 
 The first configured assessment supports CAC/entity-registration costs. Its 2026 business design is a flat base contribution, divided into a one-time program enrollment fee and a credit toward the next annual HMO enrollment. Exact production values and banking details are private operational configuration, not source code.
 
+Migration `202610100022` adds individual financial terms to `enrollment_assessments`. Existing assignments are backfilled from verified restored defaults. A validation trigger snapshots defaults for legacy inclusion calls and validates program/period matching, nonnegative amounts, fee-plus-credit equality, nonnegative adjusted payable, and a future credit year. `set_enrollment_assessment_terms` is admin-only, requires all terms and a reason, and preserves the existing audit trigger. Subscriber displays and internal exports resolve assignment terms, including an explicit zero credit; optional frontend fields allow reading older workspaces during deployment. Shared names, descriptions, due dates, references, and visibility still follow the assessment definition. Subscriber disclosures omit the shared description when it conflicts with individual financial terms.
+
+Application approval does not automatically assign an assessment. Administrators explicitly include the new enrollee and select the appropriate individual terms through **Enrollees → Adjust**. Signed adjustments change the payable but do not change the assigned future credit.
+
 The net assessment due for an enrollee is:
 
-`assessment base + HMO underpayment - HMO overpayment + admin adjustment - verified assessment payments`
+`assigned assessment contribution + HMO underpayment - HMO overpayment + admin adjustment - verified assessment payments`
 
 The result is floored at zero for collection, while the underlying premium position remains visible. Future credit is a planned amount and should be described to subscribers as becoming available when the assessment is settled. A future enhancement may require a true credit ledger when the next enrollment year opens.
 
@@ -186,6 +191,8 @@ HMO and assessment evidence use distinct, labeled upload actions. Both permit mu
 
 ## 8. 2026 operational state
 
+Read-only verification on 2026-10-10: the 2026 period has been temporarily reopened and contains seven enrollments. The latest approved/submitted enrollment has no assessment assignment or payment records. Six earlier assessment assignments remain intact. Configuration audit history confirms a temporary reduction of the shared contribution/credit and a subsequent restoration to the original terms. Real account identifiers and exact operational mappings remain only under ignored `.private/` paths. The period must remain open until the administrator finishes the temporary enrollment work; this change does not close it.
+
 As of 2026-09-15:
 
 - migration `202609120019` was deployed successfully to production;
@@ -201,7 +208,7 @@ As of 2026-09-15:
 
 On 2026-09-16 the 2026 roster was pruned to actual enrollees. The annual rollover creates a `draft` enrollment for every household carried forward, so the period also held seven rollover drafts for alumni who did not return for 2026. Each was verified inert before removal: `draft` status, zero payment records of any status, no consent, no submission, no assessment assignment, and six of the seven with no plan selected. Seven enrollments and twenty-one `enrollment_people` snapshots were deleted.
 
-The 2026 period now holds exactly six `closed` enrollments. Verified HMO collections still total ₦1,577,991.18, all six assessment assignments are intact, and there are no orphaned payment or person-snapshot rows. Every affected household keeps its 2025 enrollment and its household-scoped `people` records; twelve 2025 enrollments remain. The deletions are recorded as seven `enrollments.delete` audit events carrying full `old_data`, so the rows are reconstructible from the audit log.
+As of 2026-09-16, the 2026 period held exactly six `closed` enrollments. Verified HMO collections still totaled ₦1,577,991.18, all six assessment assignments were intact, and there were no orphaned payment or person-snapshot rows. Every affected household kept its 2025 enrollment and its household-scoped `people` records; twelve 2025 enrollments remained. The deletions are recorded as seven `enrollments.delete` audit events carrying full `old_data`, so the rows are reconstructible from the audit log.
 
 Removal ran from ignored `.private/remove-2026-unenrolled.ts`, which previews by default, re-derives its target set at apply time, re-asserts every safety condition immediately before deleting, and aborts if the count changes or any matching record shows engagement.
 
@@ -254,6 +261,7 @@ Major stages:
 - `202609120019`: separate financial assessments, enrollment adjustments, assessment-linked payments, workspace/admin/submission RPCs, audit triggers, and finalized 2026 1% + 2% premium fees.
 - `202609150020`: consent provenance columns on `enrollments`, the `sync_consent_provenance` trigger, `record_offline_consent`, and the `get_consent_records` side-car read. Deployed to production 2026-09-16.
 - `202609160021`: dropped the duplicate assessment bank columns, leaving `reference_prefix`, and rebuilt `get_financial_workspace` and `upsert_financial_assessment` around the single program account. Guarded against divergent stored accounts.
+- `202610100022`: snapshots individual assessment contribution, fee, credit, and year; adds validated admin-only individual-term mutation and period-scoped workspace fields. Production deployment pending as of 2026-10-10.
 
 When adding a migration, document its purpose here and state whether it has been deployed to production.
 
@@ -297,8 +305,8 @@ Demo-mode fixtures in `src/data/demo.ts` derive the preview period from the curr
 
 Current baseline as of this document update:
 
-- 13 Vitest files, 45 unit tests passing;
-- 16 Playwright scenarios passing: eight workflows at desktop and mobile sizes;
+- 16 Vitest files, 74 unit/database tests passing (including embedded PostgreSQL migration and authorization tests);
+- 22 Playwright scenarios passing: eleven workflows at desktop and mobile sizes;
 - production build passing;
 - Vite reports large chunks for the chart/core/Excel bundles; this is a performance warning, not a failed build.
 
@@ -375,7 +383,7 @@ Keep `docs/ADMIN_CHEATSHEET.md` aligned whenever an administrator workflow or la
 
 ## 16. Known follow-ups and design cautions
 
-- A future-year credit currently derives from the assessment configuration. Before 2027 enrollment opens, implement or confirm a durable credit-ledger/application mechanism so settled credits are applied exactly once.
+- A future-year credit now derives from individual assessment terms. Before 2027 enrollment opens, implement or confirm a durable credit-ledger/application mechanism so settled credits are applied exactly once.
 - The assessment model currently supports the active operational need. If multiple simultaneous assessments become common, replace any UI assumptions that select the first matching assessment with explicit selection and aggregation.
 - Production reconciliation uses a system actor unless explicitly run through an authenticated admin operation. Audit display should make that distinction clear.
 - Continue mobile-first testing. Most users access the portal by phone, and payment upload discoverability is a critical support burden.
@@ -408,6 +416,18 @@ Migration `202609160021` completes the single-account cleanup: the duplicate `be
 The migration aborts if any stored assessment account still differs from the program payment account, because the drop cannot be undone.
 
 ## 17. Change log for this handoff
+
+### 2026-10-10 (individual assessment terms)
+
+Production read-only review confirmed shared assessment edits affected every assignment and application approval had left the latest enrollee unassigned. Added assignment snapshots and explicit individual fee/credit controls to preserve earlier obligations and support fee-only late-joiner exceptions. Subscriber payments/dashboard and summary/full administrator exports use assigned terms; zero-credit exceptions promise no future credit. Settings explain defaults versus shared details, and the admin guide documents explicit assessment assignment after approval. Also corrected the stale settings text that suggested separate bank accounts.
+
+During review, fixed numeric editing across all affected forms: assessment-default amounts/year, surcharge percentages, individual-assessment credit year, and applicant graduation year now retain raw strings while editing. Clearing an input leaves it empty, decimals are not normalized on each keystroke, and validation distinguishes blank from an explicit zero before persistence. Individual monetary inputs already used strings; their save validation now uses the strict numeric parser too. Payment amount inputs are native uncontrolled fields and do not exhibit the forced-zero issue; the coverage year is read-only. Browser regression coverage checks clearing/retyping amounts, percentages, and years, and rejects saving a blank fee rate or individual credit amount.
+
+Sequential-typing coverage also found that `Modal` refocused its first control whenever an inline `onClose` callback changed, stealing focus after each keystroke. Initial focus now runs only when the modal mounts; the Escape listener still tracks the latest close callback. This fixes ordinary typing across all dialogs, not just assessment inputs.
+
+Validation on 2026-10-10: `npm run check` passed (lint, 74 tests in 16 files, TypeScript, production build). Fifteen embedded PostgreSQL tests execute migration `202610100022`, verify backfill/default isolation, explicit zero credit, audited insert/update, invalid/missing terms, anonymous/subscriber mutation denial, cross-program/period denial, and reads scoped to two unrelated subscriber households and the selected year. The new mobile/desktop browser scenario verifies explicit inclusion, reason validation, individual payable, preservation of another enrollee, and subscriber zero-credit disclosure. Synthetic demo data includes an unassigned late joiner to cover this flow. The existing bundle-size warnings remain.
+
+Final `npm run test:e2e` passed on 2026-10-10: 22 scenarios across desktop and mobile, including sequential typing and blank-input validation. Deployment is pending. Required remaining actions: deploy migration and frontend; apply the approved individual exception from ignored `.private/apply-individual-assessment.ts` (preview by default, rechecks preconditions at apply time); verify prior terms, all payment records, audit events, and the new assignment; update this entry with results. Private scripts and owner-readable preflight/verification records remain ignored; the existing secret key is neither logged nor committed.
 
 ### 2026-09-15 (UX, workflow, and reporting review)
 

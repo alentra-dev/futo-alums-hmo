@@ -4,6 +4,38 @@ import { assessmentForEnrollment, enrollmentFinancialPosition } from './financia
 import { nairaToKobo, paymentPosition } from './money';
 
 describe('subscriber financial position', () => {
+  it('preserves assigned terms when shared defaults change', () => {
+    const original = demoSnapshot.assessments[0];
+    const assignment = { ...demoSnapshot.assessmentAdjustments[0], amountKobo: original.amountKobo, feePortionKobo: original.feePortionKobo, futureCreditKobo: original.futureCreditKobo, creditYear: original.creditYear };
+    const changed = { ...original, amountKobo: nairaToKobo(15_000), futureCreditKobo: 0 };
+    const assigned = assessmentForEnrollment(assignment.enrollmentId, [changed], [assignment]);
+    expect(assigned.assessment).toMatchObject({ amountKobo: original.amountKobo, futureCreditKobo: original.futureCreditKobo });
+    const position = enrollmentFinancialPosition(demoSnapshot.enrollments[0], [], changed, assignment);
+    expect(position.assessmentOwnDueKobo).toBe(original.amountKobo);
+    expect(position.futureCreditPendingKobo).toBe(original.futureCreditKobo);
+  });
+
+  it('charges individual fee-only terms and never grants a future credit, including after settlement', () => {
+    const enrollment = demoSnapshot.enrollments[0];
+    const assessment = demoSnapshot.assessments[0];
+    const assignment = { ...demoSnapshot.assessmentAdjustments[0], amountKobo: nairaToKobo(15_000), feePortionKobo: nairaToKobo(15_000), futureCreditKobo: 0, creditYear: assessment.creditYear };
+    const unpaid = enrollmentFinancialPosition(enrollment, [], assessment, assignment);
+    expect(unpaid.assessmentOwnDueKobo).toBe(nairaToKobo(15_000));
+    expect(unpaid.futureCreditPendingKobo).toBe(0);
+    const payments = [
+      { ...demoSnapshot.payments[0], id: 'premium', amountKobo: enrollment.totalKobo, status: 'verified' as const, assessmentId: null },
+      { ...demoSnapshot.payments[0], id: 'fee', amountKobo: assignment.amountKobo, status: 'verified' as const, assessmentId: assessment.id },
+    ];
+    const paid = enrollmentFinancialPosition(enrollment, payments, assessment, assignment);
+    expect(paid.assessmentDueKobo).toBe(0);
+    expect(paid.futureCreditKobo).toBe(0);
+    expect(paid.futureCreditPendingKobo).toBe(0);
+  });
+
+  it('does not assign an assessment merely because one is active', () => {
+    expect(assessmentForEnrollment('unassigned', demoSnapshot.assessments, demoSnapshot.assessmentAdjustments).assessment).toBeUndefined();
+  });
+
   it('preserves exact underpayment and overpayment values', () => {
     expect(paymentPosition(27_200_549, 27_200_500)).toMatchObject({ status: 'underpaid', underpaymentKobo: 49, overpaymentKobo: 0 });
     expect(paymentPosition(9_761_104, 10_000_000)).toMatchObject({ status: 'overpaid', underpaymentKobo: 0, overpaymentKobo: 238_896 });

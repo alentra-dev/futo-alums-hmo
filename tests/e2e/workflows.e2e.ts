@@ -157,6 +157,11 @@ test('new subscriber completes the progressive application', async ({ page }, te
   await page.goto('/join');
   await page.getByRole('button', { name: 'Add principal' }).click();
   await expect(page.getByRole('heading', { name: 'Principal member' })).toBeVisible();
+  const graduationYear = page.getByLabel('FUTO graduation year');
+  await graduationYear.fill('');
+  await expect(graduationYear).toHaveValue('');
+  await graduationYear.pressSequentially('1996');
+  await expect(graduationYear).toHaveValue('1996');
 
   await page.getByLabel('Surname').fill('Eze');
   await page.getByLabel('First name').fill('Desmond');
@@ -223,6 +228,77 @@ test('administrator completes enrollment and records offline consent for a subsc
   await banner.getByRole('button', { name: 'Stop acting' }).click();
   await expect(page.getByRole('heading', { name: 'Enrollees' })).toBeVisible();
   await expect(page.locator('.acting-banner')).toHaveCount(0);
+});
+
+test('administrator assigns individual fee-only terms without changing other enrollees', async ({ page, isMobile }, testInfo) => {
+  await page.goto('/admin/enrollees');
+  const target = page.locator('.data-table__row').nth(1);
+  await expect(page.locator('.data-table__row')).toHaveCount(2);
+  const otherPayables = await page.locator('.data-table__row').locator('[data-label="Assessment payable"]').allInnerTexts();
+  await target.getByRole('button', { name: 'Adjust', exact: true }).click();
+  await page.getByLabel('Include this subscriber in the assessment').check();
+  const year = page.getByLabel('Credit enrollment year');
+  const initialYear = await year.inputValue();
+  await year.fill('');
+  await expect(year).toHaveValue('');
+  await year.pressSequentially(initialYear);
+  await expect(year).toHaveValue(initialYear);
+  const credit = page.getByLabel('Future enrollment credit (₦)');
+  await credit.fill('');
+  await expect(credit).toHaveValue('');
+  await page.getByRole('button', { name: 'Save subscriber assessment' }).click();
+  await expect(page.getByRole('alert')).toContainText('Enter valid amounts');
+  await page.getByLabel('Assigned contribution (₦)').fill('15000');
+  await page.getByLabel('One-time program fee (₦)').fill('15000');
+  await page.getByLabel('Future enrollment credit (₦)').fill('0');
+  await page.getByRole('button', { name: 'Save subscriber assessment' }).click();
+  await expect(page.getByRole('alert')).toContainText('Enter a reason');
+  await page.getByLabel('Reason for change').fill('Late joining member: one-time fee only, no future credit.');
+  await assertViewportIntegrity(page);
+  await capture(page, testInfo, 'individual-assessment-terms');
+  await page.getByRole('button', { name: 'Save subscriber assessment' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(target.locator('[data-label="Assessment payable"]')).toContainText('₦15,000.00');
+  const savedPayables = await page.locator('.data-table__row').locator('[data-label="Assessment payable"]').allInnerTexts();
+  expect(savedPayables.filter((_value, index) => index !== 1)).toEqual(otherPayables.filter((_value, index) => index !== 1));
+
+  page.once('dialog', dialog => dialog.accept());
+  await target.getByRole('button', { name: 'Act for' }).click();
+  await page.getByRole('navigation', { name: isMobile ? 'Mobile navigation' : 'Primary navigation' }).getByRole('link', { name: isMobile ? 'Upload proof' : 'Upload payment', exact: true }).click();
+  const panel = page.locator('.assessment-panel');
+  await expect(panel).toContainText('₦15,000.00');
+  await expect(panel).toContainText('No future enrollment credit is included.');
+  await expect(panel).not.toContainText('₦18,000.00');
+  await assertViewportIntegrity(page);
+});
+
+test('numeric settings can be cleared and retyped without a persistent zero', async ({ page }) => {
+  await page.goto('/admin/settings');
+  const nhis = page.getByLabel('AVON NHIS fee (%)');
+  await expect(nhis).toBeVisible();
+  await nhis.fill('');
+  await expect(nhis).toHaveValue('');
+  let confirmationCount = 0;
+  page.on('dialog', async dialog => { confirmationCount++; await dialog.dismiss(); });
+  await page.getByRole('button', { name: 'Save surcharge rates' }).click();
+  expect(confirmationCount).toBe(0);
+  await nhis.pressSequentially('0.50');
+  await expect(nhis).toHaveValue('0.50');
+  const settings = page.locator('#assessment');
+  for (const [label, replacement] of [
+    ['Program administrative fee (%)', '2.25'],
+    ['Base contribution (₦)', '15000.25'],
+    ['One-time program fee (₦)', '15000.25'],
+    ['Future enrollment credit (₦)', '0'],
+    ['Credit enrollment year', String(new Date().getFullYear() + 1)],
+  ]) {
+    const input = label.includes('(%)') ? page.getByLabel(label) : settings.getByLabel(label);
+    await input.fill('');
+    await expect(input).toHaveValue('');
+    await input.pressSequentially(replacement);
+    await expect(input).toHaveValue(replacement);
+  }
+  await assertViewportIntegrity(page);
 });
 
 test('administrator uploads a confirmation and completes payment review', async ({ page }, testInfo) => {

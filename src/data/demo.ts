@@ -174,6 +174,19 @@ export const demoSnapshot: ProgramSnapshot = {
       consentedAt: currentIso,
       completeness: 100,
     },
+    {
+      id: 'enrollment-late-joiner',
+      year: demoYear,
+      principal: { ...principal, id: 'person-late-joiner', firstName: 'Tunde', middleName: '', surname: 'Adebayo', email: 'tunde.adebayo@example.com' },
+      dependents: [],
+      planId: planOfferings[0].id,
+      category: 'individual',
+      hospital: '',
+      status: 'submitted',
+      totalKobo: planTotalKobo(planOfferings[0].individualPremiumKobo),
+      consentedAt: currentIso,
+      completeness: 100,
+    },
   ],
   payments: [
     {

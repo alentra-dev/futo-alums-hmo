@@ -102,6 +102,11 @@ export interface AssessmentAdjustment {
   enrollmentId: string;
   adjustmentKobo: number;
   note: string;
+  /** Assignment snapshots; optional only while reading a pre-migration workspace. */
+  amountKobo?: number;
+  feePortionKobo?: number;
+  futureCreditKobo?: number;
+  creditYear?: number;
 }
 
 export interface EnrollmentPeriod {

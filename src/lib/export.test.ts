@@ -1,8 +1,26 @@
 import { describe, expect, it } from 'vitest';
-import { adminFullExportColumns, avonExportColumns, createEnrollmentWorkbook } from './export';
+import { adminFullExportColumns, avonExportColumns, createEnrollmentWorkbook, createSummaryWorkbook } from './export';
 import { demoSnapshot } from '../data/demo';
 
 describe('enrollment export columns', () => {
+  it('exports individual zero-credit terms instead of shared assessment defaults', async () => {
+    const ExcelJS = await import('exceljs');
+    const enrollment = demoSnapshot.enrollments[0];
+    const snapshot = { ...demoSnapshot, enrollments: [{ ...enrollment, dependents: [] }], assessmentAdjustments: [{ ...demoSnapshot.assessmentAdjustments[0], amountKobo: 1_500_000, feePortionKobo: 1_500_000, futureCreditKobo: 0, creditYear: demoSnapshot.period.year + 1 }] };
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(await createEnrollmentWorkbook(snapshot, 'admin'));
+    const sheet = workbook.worksheets[0];
+    const value = (header: string) => sheet.getRow(2).getCell(adminFullExportColumns.indexOf(header) + 1).value;
+    expect(value('FUTURE ENROLLMENT CREDIT')).toBe(0);
+    expect(value('ASSESSMENT CONTRIBUTION')).toBe(15_000);
+    expect(value('ASSESSMENT ONE-TIME FEE')).toBe(15_000);
+    await workbook.xlsx.load(await createSummaryWorkbook(snapshot));
+    const summary = workbook.worksheets[0];
+    const headers = (summary.getRow(1).values as string[]).slice(1);
+    expect(summary.getRow(2).getCell(headers.indexOf('Planned future credit') + 1).value).toBe(0);
+    expect(summary.getRow(2).getCell(headers.indexOf('Assessment contribution') + 1).value).toBe(15_000);
+  });
+
   it('keeps all internal accounting fields only in the admin full export', () => {
     expect(adminFullExportColumns).toContain('FUTO HMO FULL PAYMNT');
     expect(avonExportColumns).not.toContain('FUTO HMO FULL PAYMNT');

@@ -155,7 +155,13 @@ The finalized 2026 HMO fee model is 1% AVON NHIS plus 2% program administration.
 
 Use this section for a distinct non-premium contribution such as CAC/entity-registration costs. Configure its name, description, base amount, retained fee portion, future-enrollment credit, credit year, due date, active state, and the transfer reference that identifies its payments. Assessment payments are collected into the same program account as HMO premiums; the reference is the only difference, so it must not match the HMO reference.
 
-Use **Enrollees** to include or exclude a subscriber and to enter a signed adjustment with a clear note. The displayed net amount combines the assessment base, exact HMO under/overpayment, any administrator adjustment, and verified assessment payments. Do not use an adjustment to hide a payment; record every transfer as a payment confirmation.
+Contribution, one-time fee, future credit, and credit year in **Program settings** are defaults for new assignments. Saving defaults does not change terms already assigned to subscribers. The name, disclosure, due date, reference, and active state remain shared.
+
+Use **Enrollees → Adjust** to include a subscriber and set their individual contribution, one-time fee, future credit, and credit year. The fee and credit must add up to the contribution. For a fee-only exception, set the contribution and fee to the approved amount and the future credit to zero; reducing only the signed adjustment does not remove credit. Enter a reason and review the payable and planned credit before saving. Other subscribers retain their own terms.
+
+Approval of a new application does not automatically assign an assessment. After approval, review the enrollee's assessment inclusion and explicitly assign the appropriate terms.
+
+Signed adjustments remain available for other corrections and do not change the planned credit. The displayed net amount combines the assigned assessment contribution, exact HMO under/overpayment, any administrator adjustment, and verified assessment payments. Do not use an adjustment to hide a payment; record every transfer as a payment confirmation. An assessment with payment records cannot be removed.
 
 ### Enrollment period
 

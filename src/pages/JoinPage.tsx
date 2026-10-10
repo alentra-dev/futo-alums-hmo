@@ -13,6 +13,7 @@ import { isDemoMode, supabase } from '../lib/supabase';
 import type { JoinConfig, JoinWorkspace, Person, PlanCategory, SubscriberApplication } from '../lib/types';
 import { LoadingPage } from './LoadingPage';
 import { loadSurchargeRates, surchargeRates, withSurchargeRates } from '../lib/surchargeRates';
+import { parseNumericInput } from '../lib/numericInput';
 
 function planPremium(plan: JoinConfig['plans'][number], category: PlanCategory) {
   return category === 'family' ? plan.familyPremiumKobo : plan.individualPremiumKobo;
@@ -43,6 +44,7 @@ export function JoinPage() {
   const [email, setEmail] = useState('');
   const [activeId, setActiveId] = useState('');
   const [draft, setDraft] = useState<SubscriberApplication | null>(null);
+  const [graduationYear, setGraduationYear] = useState('');
   const [step, setStep] = useState(1);
   const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState('');
@@ -85,6 +87,7 @@ export function JoinPage() {
     const selected = workspace?.applications.find((application) => application.id === activeId) ?? null;
     const selectedId = selected?.id ?? '';
     setDraft(selected);
+    setGraduationYear(selected ? String(selected.graduationYear) : '');
     setConsent(Boolean(selected?.consentedAt));
     setStep((current) => joinStepAfterWorkspaceRefresh(current, displayedApplicationId.current, selectedId));
     displayedApplicationId.current = selectedId;
@@ -130,8 +133,12 @@ export function JoinPage() {
 
   const save = async (submit: boolean) => {
     if (!draft) return;
-    // Family pricing is materially more expensive than individual cover, so the household
-    // must match the selected category before the application can advance or be submitted.
+    const parsedGraduationYear = parseNumericInput(graduationYear, { min: 1960, max: new Date().getFullYear(), integer: true });
+    if (parsedGraduationYear === null) {
+      setError('Enter a valid FUTO graduation year.');
+      return;
+    }
+    // The household must match the selected category before advancing or submitting.
     const householdIssue = householdValidationMessage(draft.category, draft.dependents.length);
     if (householdIssue && (submit || step >= 3)) {
       setStep(3);
@@ -143,7 +150,7 @@ export function JoinPage() {
     try {
       if (isDemoMode) {
         if (!workspace) return;
-        const updated: SubscriberApplication = { ...draft, status: submit ? 'pending_review' : 'draft', consentedAt: submit ? new Date().toISOString() : draft.consentedAt, submittedAt: submit ? new Date().toISOString() : draft.submittedAt };
+        const updated: SubscriberApplication = { ...draft, graduationYear: parsedGraduationYear, status: submit ? 'pending_review' : 'draft', consentedAt: submit ? new Date().toISOString() : draft.consentedAt, submittedAt: submit ? new Date().toISOString() : draft.submittedAt };
         setWorkspace({ ...workspace, applications: workspace.applications.map((application) => application.id === updated.id ? updated : application) });
         if (!submit) setStep((current) => Math.min(4, current + 1));
         return;
@@ -152,7 +159,7 @@ export function JoinPage() {
       const { data, error: saveError } = await supabase.rpc('save_subscriber_application', {
         p_application_id: draft.id,
         p_payload: {
-          graduationYear: draft.graduationYear,
+          graduationYear: parsedGraduationYear,
           principal: draft.principal,
           dependents: draft.dependents,
           planId: draft.planId,
@@ -268,7 +275,7 @@ export function JoinPage() {
 
           {step === 1 && <form className="form-section join-step" onSubmit={(event) => { event.preventDefault(); void save(false); }}>
             <div className="section-heading"><span><UserPlus size={20} /></span><div><h2>Principal member</h2><p>Use the details that should appear in the AVON enrollment.</p></div></div>
-            <label className="join-graduation">FUTO graduation year<input required type="number" min="1960" max={new Date().getFullYear()} value={draft.graduationYear} onChange={(event) => setDraft({ ...draft, graduationYear: Number(event.target.value) })} /></label>
+            <label className="join-graduation">FUTO graduation year<input required type="number" min="1960" max={new Date().getFullYear()} value={graduationYear} onChange={(event) => setGraduationYear(event.target.value)} /></label>
             <PersonFields person={draft.principal} onChange={updatePerson} />
             <div className="join-step__actions"><Button disabled={busy === 'save'} icon={<ArrowRight size={17} />}>{busy === 'save' ? 'Saving...' : 'Save and continue'}</Button></div>
           </form>}

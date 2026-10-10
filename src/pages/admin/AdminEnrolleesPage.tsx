@@ -6,14 +6,15 @@ import { loadFinancialWorkspace, useApp } from '../../context/AppContext';
 import { defaultAdminPeriod } from '../../lib/enrollmentPeriods';
 import { downloadAdminFullWorkbook, downloadAvonWorkbook, downloadSummaryWorkbook } from '../../lib/export';
 import { fullName } from '../../lib/format';
-import { assessmentForEnrollment, enrollmentFinancialPosition } from '../../lib/financialPosition';
+import { assignedAssessmentTerms, assessmentForEnrollment, enrollmentFinancialPosition } from '../../lib/financialPosition';
 import { formatNaira, nairaToKobo } from '../../lib/money';
+import { parseNumericInput } from '../../lib/numericInput';
 import { isDemoMode, supabase } from '../../lib/supabase';
 import { loadSurchargeRates, withSurchargeRates } from '../../lib/surchargeRates';
 import type { Enrollment, EnrollmentPeriod, EnrollmentPeriodSnapshot, ProgramSnapshot } from '../../lib/types';
 
 export function AdminEnrolleesPage() {
-  const { snapshot, actForSubscriber } = useApp();
+  const { snapshot, actForSubscriber, updateAssessmentAssignment } = useApp();
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('all');
@@ -33,6 +34,11 @@ export function AdminEnrolleesPage() {
   const [included, setIncluded] = useState(false);
   const [adjustment, setAdjustment] = useState('0');
   const [adjustmentNote, setAdjustmentNote] = useState('');
+  const [contribution, setContribution] = useState('0');
+  const [feePortion, setFeePortion] = useState('0');
+  const [futureCredit, setFutureCredit] = useState('0');
+  const [creditYear, setCreditYear] = useState(String(snapshot!.period.year + 1));
+  const [adjustmentError, setAdjustmentError] = useState('');
   const [savingAdjustment, setSavingAdjustment] = useState(false);
 
   useEffect(() => {
@@ -108,31 +114,43 @@ export function AdminEnrolleesPage() {
     setIncluded(Boolean(current));
     setAdjustment(String((current?.adjustmentKobo ?? 0) / 100));
     setAdjustmentNote(current?.note ?? '');
+    const terms = assignedAssessmentTerms(activeAssessment!, current);
+    setContribution(String(terms.amountKobo / 100));
+    setFeePortion(String(terms.feePortionKobo / 100));
+    setFutureCredit(String(terms.futureCreditKobo / 100));
+    setCreditYear(String(terms.creditYear));
+    setAdjustmentError('');
   };
   const saveFinancialAdjustment = async () => {
     if (!activeAssessment || !selectedEnrollment) return;
-    const adjustmentKobo = nairaToKobo(adjustment);
+    const parsedAmounts = [contribution, feePortion, futureCredit, adjustment].map((value) => parseNumericInput(value));
+    const [amountKobo, feePortionKobo, futureCreditKobo, adjustmentKobo] = parsedAmounts.map((value) => value === null ? NaN : nairaToKobo(value));
+    const parsedYear = parseNumericInput(creditYear, { min: periodData.period.year + 1, max: 2100, integer: true });
+    if (included && (![amountKobo, feePortionKobo, futureCreditKobo, adjustmentKobo].every(Number.isSafeInteger)
+      || amountKobo < 0 || feePortionKobo < 0 || futureCreditKobo < 0
+      || feePortionKobo + futureCreditKobo !== amountKobo || amountKobo + adjustmentKobo < 0
+      || parsedYear === null)) {
+      setAdjustmentError('Enter valid amounts: the fee and future credit must add up to the contribution, the adjusted payable cannot be negative, and the credit year must be after the enrollment year.');
+      return;
+    }
+    if (!adjustmentNote.trim()) {
+      setAdjustmentError('Enter a reason for this subscriber assessment change.');
+      return;
+    }
+    setAdjustmentError('');
     setSavingAdjustment(true);
     try {
-      if (!isDemoMode && supabase) {
-        const { error } = await supabase.rpc('set_enrollment_assessment', {
-          p_assessment_id: activeAssessment.id,
-          p_enrollment_id: selectedEnrollment.id,
-          p_included: included,
-          p_adjustment_kobo: adjustmentKobo,
-          p_note: adjustmentNote,
-        });
-        if (error) throw error;
-      }
+      const assignment = { assessmentId: activeAssessment.id, enrollmentId: selectedEnrollment.id, adjustmentKobo, note: adjustmentNote.trim(), amountKobo, feePortionKobo, futureCreditKobo, creditYear: parsedYear ?? activeAssessment.creditYear };
+      await updateAssessmentAssignment(assignment, included);
       setPeriodData((current) => ({
         ...current,
         assessmentAdjustments: included
-          ? [...current.assessmentAdjustments.filter((item) => item.assessmentId !== activeAssessment.id || item.enrollmentId !== selectedEnrollment.id), { assessmentId: activeAssessment.id, enrollmentId: selectedEnrollment.id, adjustmentKobo, note: adjustmentNote }]
+          ? [...current.assessmentAdjustments.filter((item) => item.assessmentId !== activeAssessment.id || item.enrollmentId !== selectedEnrollment.id), assignment]
           : current.assessmentAdjustments.filter((item) => item.assessmentId !== activeAssessment.id || item.enrollmentId !== selectedEnrollment.id),
       }));
       setSelectedEnrollment(null);
     } catch (reason) {
-      setPeriodError(reason instanceof Error ? reason.message : 'Unable to update subscriber assessment.');
+      setAdjustmentError(reason instanceof Error ? reason.message : 'Unable to update subscriber assessment.');
     } finally {
       setSavingAdjustment(false);
     }
@@ -184,8 +202,15 @@ export function AdminEnrolleesPage() {
       <div className="modal-form">
         <p><strong>{fullName(selectedEnrollment.principal)}</strong></p>
         <label className="checkbox-line"><input type="checkbox" checked={included} onChange={(event) => setIncluded(event.target.checked)} />Include this subscriber in the assessment</label>
+        <p>These terms apply only to this subscriber. Earlier enrollees keep their own assigned terms.</p>
+        <label>Assigned contribution (₦)<input type="number" min="0" step="0.01" value={contribution} disabled={!included} onChange={(event) => setContribution(event.target.value)} /></label>
+        <label>One-time program fee (₦)<input type="number" min="0" step="0.01" value={feePortion} disabled={!included} onChange={(event) => setFeePortion(event.target.value)} /></label>
+        <label>Future enrollment credit (₦)<input type="number" min="0" step="0.01" value={futureCredit} disabled={!included} onChange={(event) => setFutureCredit(event.target.value)} /><small>Set to zero when this subscriber receives no future credit.</small></label>
+        <label>Credit enrollment year<input type="number" min={periodData.period.year + 1} max="2100" value={creditYear} disabled={!included} onChange={(event) => setCreditYear(event.target.value)} /></label>
         <label>Subscriber adjustment (₦)<input type="number" step="0.01" value={adjustment} disabled={!included} onChange={(event) => setAdjustment(event.target.value)} /><small>Positive amounts increase the net due; negative amounts reduce it.</small></label>
-        <label>Adjustment note<textarea rows={3} value={adjustmentNote} disabled={!included} onChange={(event) => setAdjustmentNote(event.target.value)} /></label>
+        <label>Reason for change<textarea required rows={3} value={adjustmentNote} onChange={(event) => setAdjustmentNote(event.target.value)} /></label>
+        {included && <p>Assessment payable: <strong>{formatNaira(nairaToKobo(contribution) + nairaToKobo(adjustment))}</strong>. Planned future credit: <strong>{formatNaira(nairaToKobo(futureCredit))}</strong>. HMO reconciliation is calculated separately.</p>}
+        {adjustmentError && <p className="form-error" role="alert">{adjustmentError}</p>}
         <div className="modal__actions"><Button variant="secondary" onClick={() => setSelectedEnrollment(null)}>Cancel</Button><Button disabled={savingAdjustment} onClick={() => void saveFinancialAdjustment()}>{savingAdjustment ? 'Saving...' : 'Save subscriber assessment'}</Button></div>
       </div>
     </Modal>}
