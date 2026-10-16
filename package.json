@@ -11,8 +11,11 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "import:2025": "tsx scripts/import-2025.ts",
-    "check": "npm run lint && npm run test && npm run build",
-    "test:e2e": "playwright test"
+    "check": "npm run lint && npm run test && npm run check:monitor && npm run build",
+    "test:e2e": "playwright test",
+    "check:monitor": "tsc -p ops/supabase-monitor/tsconfig.json",
+    "monitor:probe": "tsx ops/supabase-monitor/probe.ts",
+    "monitor:deploy": "tsx ops/supabase-monitor/deploy.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.1",
@@ -47,7 +50,8 @@
     "typescript": "^5.9.2",
     "typescript-eslint": "^8.41.0",
     "vite": "^7.1.3",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "wrangler": "4.151.1"
   },
   "overrides": {
     "uuid": "^11.1.0"

@@ -12,3 +12,6 @@ test-results/
 .DS_Store
 
 .artifacts/
+.wrangler/
+.dev.vars
+.dev.vars.*

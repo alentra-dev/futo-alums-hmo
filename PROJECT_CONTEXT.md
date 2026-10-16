@@ -1,6 +1,6 @@
 # FUTO Alums HMO Program: Durable Project Context
 
-Last updated: 2026-10-10
+Last updated: 2026-10-16
 
 This document is the persistent handoff for engineers and LLM coding agents working on this repository. Read it before changing the application and update it whenever code, schema, business rules, deployment, configuration, or production operating state changes. `AGENTS.md` makes that maintenance requirement explicit.
 
@@ -307,7 +307,7 @@ Demo-mode fixtures in `src/data/demo.ts` derive the preview period from the curr
 
 Current baseline as of this document update:
 
-- 16 Vitest files, 74 unit/database tests passing (including embedded PostgreSQL migration and authorization tests);
+- 17 Vitest files, 104 unit/database/monitor tests passing (including embedded PostgreSQL migration and authorization tests);
 - 22 Playwright scenarios passing: eleven workflows at desktop and mobile sizes;
 - production build passing;
 - Vite reports large chunks for the chart/core/Excel bundles; this is a performance warning, not a failed build.
@@ -348,6 +348,24 @@ Supabase secrets such as email-provider credentials are configured in Supabase, 
 ### Renewal campaign
 
 `.github/workflows/send-2026-renewal-email.yml` supports `dry_run` and guarded `send` modes. It uses an ephemeral invocation key, tracks idempotent deliveries, and rotates the key afterward. Do not rerun a historical campaign casually. Validate recipients first and ensure recipient-to-household links are correct before any send.
+
+### External database monitor
+
+`ops/supabase-monitor/` contains a Cloudflare scheduled Worker, focused tests, safe
+probe/deployment commands, and the operational guide. Its four-daily UTC schedule
+is `17 1,7,13,19 * * *` (02:17, 08:17, 14:17, 20:17 Africa/Lagos). It makes a fresh
+public `get_public_join_config` database request and validates open or closed
+enrollment responses. Only a publishable key is used; no authentication activity,
+subscriber reads, financial writes, or Supabase policy changes are involved.
+
+The independent Healthchecks.io check must have project-email routing and a
+23-hour period plus 1-hour grace. Its private UUID ping URL is a Worker secret.
+Deployment preflight requires both a valid database response and acknowledged
+heartbeat delivery. `npm run monitor:deploy -- --verify-only` verifies provider-side
+configuration and a live request but is not proof of a Cron invocation; that
+requires an actual Cloudflare event and matching heartbeat. Current deployment
+state is recorded in the dated change log below. Cloudflare hosting access and
+monitor routing are separate from the GitHub/Supabase deployment credentials.
 
 ### Typical release sequence
 
@@ -418,6 +436,16 @@ Migration `202609160021` completes the single-account cleanup: the duplicate `be
 The migration aborts if any stored assessment account still differs from the program payment account, because the drop cannot be undone.
 
 ## 17. Change log for this handoff
+
+### 2026-10-16 (external database monitoring)
+
+Implementing a Cloudflare Worker outside Supabase to call the existing public `get_public_join_config` database RPC four times daily. The probe accepts closed enrollment as healthy, validates the response schema, uses only a publishable key, and performs no subscriber sign-ins or database writes. It has request timeouts, bounded retries, and sanitized metadata-only logging. No schema migration or authorization-policy change is needed.
+
+An independent Healthchecks.io UUID heartbeat reports successful runs and failed checks, with project-email alerts and a 24-hour missed-success threshold (23-hour period plus 1-hour grace). The Worker has no public HTTP endpoint and no credentials capable of modifying Supabase data. Deployment is gated on a successful database/heartbeat preflight and verification of the actual Cloudflare schedule and secret bindings. Cloudflare credentials and the heartbeat URL stay under owner-readable ignored `.private/` paths or provider secret bindings, never public source, CLI arguments, or frontend configuration.
+
+Validation on 2026-10-16: `npm run check` passed (104 tests in 17 files, lint, dedicated monitor type checks, TypeScript, and production build); `npm run test:e2e` passed all 22 desktop/mobile scenarios. Wrangler dry-run compiled a 4.95 KiB Worker bundle without deploying. A real publishable-key production probe returned HTTP 200 on its first attempt. A read-only Cloudflare API check confirmed account access and that the intended Worker name is unused. The private access file is owner-readable and ignored; it currently contains the Cloudflare account and token but not the independent heartbeat URL.
+
+Current state: code and local/live-probe validation are complete, but production scheduling and alert delivery are not active. Deployment remains gated on the Healthchecks.io URL and project-email routing. Required remaining actions: confirm heartbeat delivery, deploy, observe an actual Cloudflare scheduled event and its success heartbeat, verify email routing, and record the final operational state here. Free-plan checks remain a best-effort activity mechanism; only a paid Supabase plan removes inactivity pausing as a platform policy.
 
 ### 2026-10-10 (individual assessment terms)
 
