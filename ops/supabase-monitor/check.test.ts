@@ -18,7 +18,7 @@ describe('external Supabase database check', () => {
     const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValueOnce(json(payload));
     expect(await probeDatabase(env, { fetch, sleep })).toMatchObject({ ok: true, attempts: 1, httpStatus: 200 });
     expect(fetch).toHaveBeenCalledWith(`${SUPABASE_URL}/rest/v1/rpc/get_public_join_config`, expect.objectContaining({
-      method: 'POST', body: '{}', cache: 'no-store', redirect: 'error',
+      method: 'POST', body: '{}', cache: 'no-store', redirect: 'manual',
       headers: { apikey: env.SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
       signal: expect.any(AbortSignal),
     }));
@@ -36,7 +36,7 @@ describe('external Supabase database check', () => {
     expect(sleep).toHaveBeenCalledWith(1000);
   });
 
-  it.each([401,403,404])('fails promptly on a permanent HTTP %s', async status => {
+  it.each([301,302,307,401,403,404])('fails promptly on a redirect or permanent HTTP %s', async status => {
     const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(new Response('private diagnostic', { status }));
     expect(await probeDatabase(env, { fetch, sleep })).toMatchObject({ ok: false, attempts: 1, reason: 'http_error', httpStatus: status });
     expect(fetch).toHaveBeenCalledTimes(1);
@@ -76,6 +76,7 @@ describe('independent heartbeat and scheduled handler', () => {
     const metadata = String(fetch.mock.calls[1][1]?.body);
     expect(metadata).not.toContain(env.SUPABASE_PUBLISHABLE_KEY);
     expect(metadata).not.toContain('plans');
+    expect(fetch.mock.calls[1][1]?.redirect).toBe('manual');
   });
 
   it('signals failure without sending a success heartbeat', async () => {

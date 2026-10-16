@@ -68,7 +68,8 @@ export async function probeDatabase(env: MonitorEnvironment, overrides: Partial<
       const response = await dependencies.fetch(`${SUPABASE_URL}/rest/v1/rpc/get_public_join_config`, {
         method: 'POST',
         headers: { apikey: env.SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
-        body: '{}', redirect: 'error', cache: 'no-store', signal: AbortSignal.timeout(10_000),
+        // Workers rejects redirect: 'error'; manual mode exposes 3xx as failures.
+        body: '{}', redirect: 'manual', cache: 'no-store', signal: AbortSignal.timeout(10_000),
       });
       if (!response.ok) {
         await response.body?.cancel();
@@ -98,7 +99,7 @@ export async function runMonitor(env: MonitorEnvironment, overrides: Partial<Dep
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const response = await dependencies.fetch(url, {
-        method: 'POST', redirect: 'error', cache: 'no-store', signal: AbortSignal.timeout(5_000),
+        method: 'POST', redirect: 'manual', cache: 'no-store', signal: AbortSignal.timeout(5_000),
         headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ok: probe.ok, reason: probe.reason, attempts: probe.attempts, durationMs: probe.durationMs }),
       });
       // Healthchecks can return 200 with "not found" or "rate limited" in the body.

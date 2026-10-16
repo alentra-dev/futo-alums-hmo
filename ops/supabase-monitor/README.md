@@ -70,6 +70,10 @@ ping in Healthchecks.io before recording automatic scheduling as verified. Cron
 configuration can take up to 15 minutes to propagate. A local scheduled-handler
 test is useful but must not be described as an actual hosted Cron run.
 
+The test suite includes a synthetic workerd/Miniflare check of both request
+configurations. Workers rejects `redirect: 'error'`; the monitor uses `manual`
+and treats redirects as failed responses without forwarding credentials.
+
 Email delivery needs its own verification in Healthchecks.io. Test failure/recovery
 with a separate synthetic check or an authorized test notification; never break
 production Supabase to test an alert.

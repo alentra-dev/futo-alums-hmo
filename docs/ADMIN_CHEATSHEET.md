@@ -222,6 +222,21 @@ Give admin access only to people actively performing program administration. Rem
 9. Send only the AVON export to AVON through the approved secure channel.
 10. Retain records according to the program's seven-year retention policy.
 
+## Off-season availability monitoring
+
+The external Cloudflare monitor checks the database four times daily: 02:17, 08:17,
+14:17, and 20:17 Africa/Lagos. Closed enrollment is an expected healthy response.
+Healthchecks.io routes configured failure and missed-success alerts to the project
+email. A missing successful check for 24 hours should trigger an alert independently
+of Cloudflare's own scheduler.
+
+For a database-failure alert, inspect the Supabase project and resume it from the
+dashboard if it is paused. For a missed-check alert, inspect the Cloudflare Worker's
+Cron Events/logs and the Healthchecks.io check. Enrollment can remain closed while
+availability is restored. The [monitor operating guide](../ops/supabase-monitor/README.md)
+contains the verification and maintenance commands. Scheduled activity is best
+effort; a paid Supabase plan removes inactivity pausing.
+
 ## Safety rules
 
 - Never share magic links, payment proofs, Admin Full Exports, or family details in group chats.
