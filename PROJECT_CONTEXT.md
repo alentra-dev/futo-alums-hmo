@@ -247,13 +247,13 @@ Read-only verification on 2026-10-22, before migration `202610220023`:
 - The six earlier assignments keep their original terms, including the 2027 credit. The shared defaults were still the original contribution and credit.
 - The exact identifiers, amounts and invoice reference are recorded only under ignored `.private/`.
 
-Pending deployment action, private and ignored: `.private/apply-late-enrollment.ts` (preview, then `--apply`) does three things and verifies everything else in the period is unchanged:
+Applied on 2026-10-22 after migrations `202610220023` and `202610220024` were deployed. The ignored `.private/apply-late-enrollment.ts` ran in preview, then with `--apply`, rechecking every precondition. Results:
 
-1. Restores the original 2026-09-05 close and closes the period.
-2. Records the late member's AVON coverage from 2026-10-01.
-3. Sets the assessment defaults to the ₦15,000 fee-only new-enrollee terms.
-
-Update this section once it has run.
+- The 2026 renewal window is restored to its original close of 2026-09-05 23:59 WAT, and the period is `closed`. The public join config now reports `acceptingApplications: true`, `enrollmentMode: 'late'`, and coverage from Oct 2026.
+- The late member's AVON coverage is recorded from 2026-10-01. Stored: 11 months, ₦242,076.08 prorated premium, ₦2,420.76 NHIS, and a ₦22,226.99 proration credit. Their 2027 carry-forward is exactly +₦22,226.99, because their combined transfer settles the ₦15,000 CAC fee.
+- The assessment defaults (new-enrollee terms) are now ₦15,000 / ₦15,000 / ₦0 credit / 2027.
+- The script verified that all other enrollments, all 7 assessment assignments, and all 8 payment records were unchanged.
+- The carry-forwards of the six earlier enrollees were computed and checked by hand against their payments. They reflect each member's exact premium variance and their CAC credit or one-time fee owed. Per-member figures are kept only in ignored `.private/late-enrollment-verified.json`.
 
 Read-only verification on 2026-10-10: the 2026 period has been temporarily reopened and contains seven enrollments. The latest approved/submitted enrollment has no assessment assignment or payment records. Six earlier assessment assignments remain intact. Configuration audit history confirms a temporary reduction of the shared contribution/credit and a subsequent restoration to the original terms. Real account identifiers and exact operational mappings remain only under ignored `.private/` paths. The period must remain open until the administrator finishes the temporary enrollment work; this change does not close it.
 
@@ -330,12 +330,12 @@ Major stages:
 - `202609160021`: dropped the duplicate assessment bank columns, leaving `reference_prefix`, and rebuilt `get_financial_workspace` and `upsert_financial_assessment` around the single program account. Guarded against divergent stored accounts.
 - `202610100022`: snapshots individual assessment contribution, fee, credit, and year; adds validated admin-only individual-term mutation and period-scoped workspace fields. Deployed to production 2026-10-10.
 
-- `202610220024`: automatic next-year carry-forward: `carry_forward_enabled` on periods (false before 2026), the internal `enrollment_carry_forward` and `enrollment_carry_in` functions, and the side-car read `get_enrollment_carry_forwards`. Wrapped in `BEGIN`/`COMMIT`. Deployed with `202610220023`; see the change log.
+- `202610220024`: automatic next-year carry-forward: `carry_forward_enabled` on periods (false before 2026), the internal `enrollment_carry_forward` and `enrollment_carry_in` functions, and the side-car read `get_enrollment_carry_forwards`. Wrapped in `BEGIN`/`COMMIT`. Deployed to production 2026-10-22 with `202610220023`.
 - `202610220023`: continuous late enrollment. It adds `coverage_starts_on` and `late_enrollment_open` to periods, and coverage-start and stored-proration columns to enrollments, with the `apply_enrollment_proration` trigger. It also adds:
   - the internal helpers `application_intake`, `late_coverage_start`, and `period_after_renewal_window`;
   - the admin-only `set_enrollment_coverage_start` and the side-car read `get_enrollment_coverage`.
 
-  It rebuilds `get_public_join_config` (adds `enrollmentMode`, coverage dates, and the new-enrollee assessment amounts), `create_subscriber_application`, `get_admin_subscriber_applications`, `review_subscriber_application` (records the late coverage start and auto-assigns the assessment), and `update_enrollment_period`. It is wrapped in `BEGIN`/`COMMIT`. **Not yet deployed as of 2026-10-22.**
+  It rebuilds `get_public_join_config` (adds `enrollmentMode`, coverage dates, and the new-enrollee assessment amounts), `create_subscriber_application`, `get_admin_subscriber_applications`, `review_subscriber_application` (records the late coverage start and auto-assigns the assessment), and `update_enrollment_period`. It is wrapped in `BEGIN`/`COMMIT`. Deployed to production 2026-10-22.
 
 When adding a migration, document its purpose here and state whether it has been deployed to production.
 
@@ -536,6 +536,20 @@ Validation on 2026-10-22: `npm run check` passed (157 tests in 21 files), and `n
 
 The private production script additionally asserts that the late member carries exactly +₦22,226.99 into 2027.
 
+Deployed on 2026-10-22, together with the late-enrollment change below. Steps, in order:
+
+1. Commit `16fa43d` was pushed, and GitHub Pages run `39798594145` succeeded. The live bundles were checked for the new RPCs and copy.
+2. `npm run monitor:deploy` redeployed the monitor Worker with the late-enrollment validator. Its preflight probe and heartbeat were delivered, and the cron and secret bindings were verified.
+3. Supabase run `39799217651` completed successfully. GitHub did not serve its step logs, so migrations `202610220023` and `202610220024` were confirmed directly: the live join config returned the new fields, and the private script's preflight asserted the new columns.
+4. The private maintenance was previewed and applied (§8).
+
+Post-deploy checks from an unauthenticated client:
+
+- `get_enrollment_carry_forwards`, `get_enrollment_coverage`, `set_enrollment_coverage_start`, `enrollment_carry_forward` and `application_intake` all return `42501 permission denied`, against a `PGRST202` control.
+- `npm run monitor:probe` returned HTTP 200 on the first attempt.
+
+No remaining release action.
+
 ### 2026-10-22 (continuous late enrollment and AVON proration)
 
 AVON keeps enrolling new members after the program's renewal window and bills them pro rata by month joined (a supplementary invoice covering Oct 2026 – Aug 2027 bills 11 of 12 months). The user asked for the following:
@@ -574,7 +588,7 @@ The PGlite suite proves the following:
 - the audited admin coverage change, with subscriber and anonymous calls refused;
 - isolation of coverage reads for two unrelated households, with the admin note hidden from subscribers.
 
-Deployment sequence, all pending:
+Deployment sequence (completed 2026-10-22; see the entry above):
 
 1. Push `main` and monitor GitHub Pages. The frontend degrades to full-term readings until the migration exists.
 2. `npm run monitor:deploy` with the updated validator.
