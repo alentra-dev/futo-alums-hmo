@@ -241,6 +241,15 @@ HMO and assessment evidence use distinct, labeled upload actions. Both permit mu
 
 ## 8. 2026 operational state
 
+**Current state, as of 2026-10-22, after migration `202610220025`.** The entries below are dated history, newest first.
+
+- The 2026 period is `closed`, with its original renewal close of 2026-09-05 23:59 WAT.
+- New subscribers join as late enrollees for the Sep 2026 – Aug 2027 AVON term.
+- New-enrollee CAC terms are ₦15,000 fee-only.
+- 2026 has seven enrollments: six earlier members and one late member, who carries +₦22,226.99 into 2027.
+- Every 2026 balance is carried into 2027 automatically.
+- Migration `202610220025` changed only the premium/CAC split of one earlier member's carry-forward, now +₦18,000.00 CAC credit and +₦3.96 overpaid; all seven net carry-forwards are unchanged.
+
 Read-only verification on 2026-10-22, before migration `202610220023`:
 
 - The 2026 period was `open` after a temporary reopen on 2026-10-10. Its audit history shows the original renewal window closed 2026-09-05 23:59 WAT, after an extension of the 2026-08-31 close.
