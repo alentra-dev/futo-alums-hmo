@@ -72,7 +72,7 @@ Untick **Joined after the renewal window** only if the member actually has full-
 4. Download the appropriate workbook:
    - **Summary**: principal member, plan/category, HMO payable/verified/position, assessment paid/due, future credit, and status.
    - **Admin full export**: complete enrollment fields plus internal HMO and assessment accounting fields.
-   - **AVON export**: AVON-ready fields only; excludes payment, assessment, and other internal administration fields and includes only submitted or closed enrollments.
+   - **AVON export**: AVON-ready enrollment fields only (through **CLIENT NAME**). It excludes premium, NHIS, balance, payment, assessment, and other internal administration fields, and includes only submitted or closed enrollments. Premium and balance columns are in the **Admin full export**.
    - The **Summary** and **Admin full export** also show each late member's AVON coverage, billed months, prorated premium and NHIS, and proration credit. They also show every member's balance **brought forward** from last year and **carry-forward** to next year (HMO balance, CAC balance, net).
 
 Important:

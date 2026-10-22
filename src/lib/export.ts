@@ -23,7 +23,8 @@ export const adminFullExportColumns = [
   'BROUGHT FORWARD FROM PRIOR YEAR', 'CARRY-FORWARD HMO BALANCE', 'CARRY-FORWARD CAC BALANCE', 'CARRY-FORWARD NET',
 ];
 
-const internalColumns = new Set(['FUTO HMO FULL PAYMNT', 'HMO PAYMENT POSITION', 'HMO UNDERPAYMENT', 'HMO OVERPAYMENT', 'PROGRAM ASSESSMENT', 'ASSESSMENT PAID', 'ASSESSMENT NET DUE', 'FUTURE ENROLLMENT CREDIT', 'ASSESSMENT CONTRIBUTION', 'ASSESSMENT ONE-TIME FEE', 'CREDIT ENROLLMENT YEAR',
+// AVON needs only enrollment fields; every financial column stays in the admin full export.
+const internalColumns = new Set(['FUTO HMO FULL PAYMNT', 'AVON PREMIUM', 'AVON (+ NHIS FEE)', 'AVON BALANCE', 'HMO PAYMENT POSITION', 'HMO UNDERPAYMENT', 'HMO OVERPAYMENT', 'PROGRAM ASSESSMENT', 'ASSESSMENT PAID', 'ASSESSMENT NET DUE', 'FUTURE ENROLLMENT CREDIT', 'ASSESSMENT CONTRIBUTION', 'ASSESSMENT ONE-TIME FEE', 'CREDIT ENROLLMENT YEAR',
   'LATE ENROLLMENT', 'AVON COVERAGE START', 'AVON BILLED MONTHS', 'AVON PRORATED PREMIUM', 'AVON PRORATED NHIS', 'PRORATION CREDIT',
   'BROUGHT FORWARD FROM PRIOR YEAR', 'CARRY-FORWARD HMO BALANCE', 'CARRY-FORWARD CAC BALANCE', 'CARRY-FORWARD NET']);
 export const avonExportColumns = adminFullExportColumns.filter((column) => !internalColumns.has(column));
@@ -83,7 +84,7 @@ export async function createEnrollmentWorkbook(snapshot: ProgramSnapshot, kind: 
   header.height = 34;
   sheet.columns.forEach((column, index) => { column.width = index >= 13 && index <= 22 ? 24 : 18; });
   sheet.autoFilter = { from: 'A1', to: `${sheet.getColumn(columns.length).letter}1` };
-  const currencyColumns = adminFull ? [25, 26, 27, 28, 30, 31, 33, 34, 35, 36, 37, 42, 43, 44, 45, 46, 47, 48] : [25, 26, 27];
+  const currencyColumns = adminFull ? [25, 26, 27, 28, 30, 31, 33, 34, 35, 36, 37, 42, 43, 44, 45, 46, 47, 48] : [];
   currencyColumns.forEach((column) => { sheet.getColumn(column).numFmt = '₦#,##0.00'; });
   return workbook.xlsx.writeBuffer();
 }

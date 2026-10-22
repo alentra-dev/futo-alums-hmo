@@ -53,12 +53,19 @@ describe('enrollment export columns', () => {
     expect(summary.getRow(2).getCell(headers.indexOf('Proration credit') + 1).value).toBe(late.proration!.creditKobo / 100);
   });
 
-  it('moves AVON financial columns into the correct provider template positions', () => {
-    expect(avonExportColumns.slice(-3)).toEqual([
-      'AVON PREMIUM',
-      'AVON (+ NHIS FEE)',
-      'AVON BALANCE',
-    ]);
+  it('sends AVON enrollment fields only, keeping premium and balance columns internal', async () => {
+    for (const column of ['AVON PREMIUM', 'AVON (+ NHIS FEE)', 'AVON BALANCE']) {
+      expect(avonExportColumns).not.toContain(column);
+      expect(adminFullExportColumns).toContain(column);
+    }
+    expect(avonExportColumns.slice(-3)).toEqual(['HOSPITAL NAME', 'PLAN TYPE', 'CLIENT NAME']);
+    const ExcelJS = await import('exceljs');
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(await createEnrollmentWorkbook(demoSnapshot, 'avon'));
+    const sheet = workbook.worksheets[0];
+    // Every AVON row ends at CLIENT NAME, with no stray financial values beyond it.
+    expect(sheet.columnCount).toBe(avonExportColumns.length);
+    expect(sheet.getRow(2).getCell(avonExportColumns.length).value).toBe('FUTO Alumni HMO');
   });
 
   it('writes distinct headers into the generated Excel workbooks', async () => {

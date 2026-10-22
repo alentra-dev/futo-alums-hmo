@@ -300,8 +300,8 @@ Exports:
 
 - `Summary`: principal member only, selected plan/category, total owed, verified HMO paid, exact premium position, assessment paid/due, and future credit as applicable.
 - `Admin full export`: all provider enrollment fields plus internal financial and administrative fields.
-- Admin full and summary exports also carry late-enrollment and carry-forward columns: late flag, AVON coverage start, billed months, prorated premium and NHIS, proration credit, the balance brought forward from the prior year, and the carry-forward HMO balance, CAC balance and net. These are internal and excluded from the AVON export. AVON columns still show the annual premium; AVON's own supplementary invoice states the prorated bill.
-- `AVON export`: provider-required enrollment rows only. It must exclude internal payment, program fee/accounting, assessment, audit, and `FUTO HMO FULL PAYMNT` fields.
+- Admin full and summary exports also carry late-enrollment and carry-forward columns: late flag, AVON coverage start, billed months, prorated premium and NHIS, proration credit, the balance brought forward from the prior year, and the carry-forward HMO balance, CAC balance and net. These are internal and excluded from the AVON export.
+- `AVON export`: provider-required enrollment rows only, ending at `CLIENT NAME`. It must exclude internal payment, program fee/accounting, assessment, and audit fields. Since 2026-10-22 it also excludes `FUTO HMO FULL PAYMNT`, `AVON PREMIUM`, `AVON (+ NHIS FEE)`, and `AVON BALANCE`, at the user's request: AVON does not need them. These remain in the admin full export.
 
 Do not include dependent names in the high-level program summary. Dependents appear only where required for full administration/provider submission.
 
@@ -525,6 +525,10 @@ Migration `202609160021` completes the single-account cleanup: the duplicate `be
 The migration aborts if any stored assessment account still differs from the program payment account, because the drop cannot be undone.
 
 ## 17. Change log for this handoff
+
+### 2026-10-22 (AVON export without premium columns)
+
+At the user's request, `AVON PREMIUM`, `AVON (+ NHIS FEE)`, and `AVON BALANCE` were moved into the internal export columns (`src/lib/export.ts`), so the AVON workbook now ends at `CLIENT NAME` and carries no financial columns. The admin full export keeps all three, with unchanged values and currency formatting. A regression test asserts the AVON header set, its last columns, and that no data row extends past `CLIENT NAME`. This is frontend only; there is no migration.
 
 ### 2026-10-22 (carry-forward overpayment allocation)
 
