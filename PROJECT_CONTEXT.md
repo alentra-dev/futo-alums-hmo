@@ -526,6 +526,20 @@ The migration aborts if any stored assessment account still differs from the pro
 
 ## 17. Change log for this handoff
 
+### 2026-10-22 (duplicate account from a mistyped email)
+
+The user reported that one earlier member had two accounts. The 2025 import created a subscriber account under a mistyped email, which owned the member's household (2025 and 2026 Premium family enrollments, both closed and paid). Their real email belonged to a separate administrator-only account with no household. The mistyped account had never signed in, so the member could not reach his own household. The 2026 renewal invitation had been sent to the mistyped address.
+
+At the user's direction, the ignored `.private/merge-typo-account.ts` merged them in production, after a read-only inspection and a preview:
+
+1. Linked the household to the correct account, which keeps its admin role and gains subscriber access.
+2. Corrected the principal's email on the canonical `people` row and the 2026 enrollment snapshot. The closed 2025 snapshot is left as submitted to AVON.
+3. Set the correct account's display name.
+4. Reassigned the one renewal-email delivery record. It keeps the mistyped `recipient_email` as the factual record of where the email went.
+5. Deleted the mistyped Auth user, which cascaded its profile, membership and household link.
+
+Before deleting, the script asserted that the mistyped account had no sign-ins, payments, reviews, consent records, applications or privacy requests. It then verified the result: the account is gone, the household has the correct account as its only link, the email is corrected, the admin role is intact, both enrollments are present, and the 2027 carry-forward is unchanged. The changes are audited as system maintenance. A full pre-change snapshot is in ignored `.private/typo-account-before.json`. No code or schema changed. For a future case where the target email has no existing account, use **Subscriber access → Change email** instead.
+
 ### 2026-10-22 (portal activity was never recorded)
 
 The admin **Portal activity** page showed zero activity, although the late member used the portal on 2026-10-10. Read-only checks found:
