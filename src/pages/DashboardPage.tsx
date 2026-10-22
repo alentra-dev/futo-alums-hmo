@@ -3,12 +3,15 @@ import { ArrowRight, Banknote, CalendarDays, CheckCircle2, ClipboardCheck, Copy,
 import { useApp } from '../context/AppContext';
 import { formatDate, fullName } from '../lib/format';
 import { workspaceEnrollment } from '../lib/enrollmentAccess';
-import { assessmentForEnrollment, enrollmentFinancialPosition } from '../lib/financialPosition';
+import { assessmentForEnrollment, enrollmentFinancialPosition, nextEnrollmentCarryForward, registrationFeeKobo } from '../lib/financialPosition';
 import { formatNaira } from '../lib/money';
 import { paymentInstruction } from '../lib/paymentInstruction';
 import { FeeBreakdown } from '../components/FeeBreakdown';
 import { surchargeRates } from '../lib/surchargeRates';
 import { Button, PageHeader, ProgressBar, StatusBadge } from '../components/ui';
+import { LateEnrollmentNotice } from '../components/LateEnrollmentNotice';
+import { coverageTermStart } from '../lib/proration';
+import { BroughtForwardBreakdown, CarryForwardPanel } from '../components/CarryForwardPanel';
 
 export function DashboardPage() {
   const { snapshot, activeEnrollmentId, actingEnrollmentId } = useApp();
@@ -18,12 +21,13 @@ export function DashboardPage() {
   const relevantPayments = payments.filter((item) => item.enrollmentId === enrollment.id);
   const { assessment, adjustment } = assessmentForEnrollment(enrollment.id, snapshot!.assessments, snapshot!.assessmentAdjustments);
   const financial = enrollmentFinancialPosition(enrollment, relevantPayments, assessment, adjustment);
+  const carryOut = nextEnrollmentCarryForward(enrollment, relevantPayments, registrationFeeKobo(snapshot!.assessments), assessment, adjustment, period.carryForwardEnabled !== false);
   const verified = financial.premiumPaidKobo;
   const pending = relevantPayments.filter((item) => item.status === 'pending' && !item.assessmentId).reduce((sum, item) => sum + item.amountKobo, 0);
   const position = financial.premium;
   const selectedPlan = snapshot!.plans.find((plan) => plan.id === enrollment.planId);
   const premiumKobo = selectedPlan ? (enrollment.category === 'family' ? selectedPlan.familyPremiumKobo : selectedPlan.individualPremiumKobo) : 0;
-  const progress = enrollment.totalKobo ? (verified / enrollment.totalKobo) * 100 : 0;
+  const progress = enrollment.totalKobo ? ((verified + financial.carryInKobo) / enrollment.totalKobo) * 100 : 0;
   const canNotifyPayment = Boolean(enrollment.planId) && ['submitted', 'closed'].includes(enrollment.status) && enrollment.totalKobo > 0;
   // One account collects everything, so the next step must name whichever obligation is
   // actually outstanding and the reference that separates it, not default to the assessment.
@@ -41,20 +45,23 @@ export function DashboardPage() {
   const copyAccount = () => void navigator.clipboard.writeText(currentInstruction.accountNumber);
 
   return <>
-    <PageHeader eyebrow={`${period.year} enrollment`} title={`Welcome, ${enrollment.principal.firstName}`} description={period.status === 'closed' ? 'Enrollment is closed. Your payment records remain available.' : `Enrollment closes ${formatDate(period.endsAt, snapshot!.program.timezone)}.`} actions={<Button icon={nextStep.to === '/payments' ? <Banknote size={18} /> : <ClipboardCheck size={18} />} onClick={() => navigate(nextStep.to)}>{nextStep.cta}</Button>} />
+    <PageHeader eyebrow={`${period.year} enrollment`} title={`Welcome, ${enrollment.principal.firstName}`} description={enrollment.proration ? 'Your late enrollment is active. Your payment records remain available.' : period.status === 'closed' ? 'Enrollment is closed. Your payment records remain available.' : `Enrollment closes ${formatDate(period.endsAt, snapshot!.program.timezone)}.`} actions={<Button icon={nextStep.to === '/payments' ? <Banknote size={18} /> : <ClipboardCheck size={18} />} onClick={() => navigate(nextStep.to)}>{nextStep.cta}</Button>} />
+
+    {enrollment.proration && <LateEnrollmentNotice proration={enrollment.proration} termStart={coverageTermStart(period)} />}
 
     <section className="metric-grid">
       <article className="metric metric--accent"><span className="metric__icon"><HeartPulse size={21} /></span><div><small>Selected plan</small><strong>{selectedPlan?.name ?? 'Not selected'}</strong><span>{enrollment.category === 'family' ? `${enrollment.dependents.length + 1} covered people` : 'Individual cover'}</span></div></article>
-      <article className="metric"><span className="metric__icon"><Banknote size={21} /></span><div><small>Total payable</small><strong>{formatNaira(enrollment.totalKobo)}</strong><span>Includes the configured AVON NHIS and program administrative fees</span></div></article>
+      <article className="metric"><span className="metric__icon"><Banknote size={21} /></span><div><small>Total payable</small><strong>{formatNaira(enrollment.totalKobo)}</strong><span>{enrollment.carryIn ? `${enrollment.carryIn.netKobo >= 0 ? 'Less' : 'Plus'} ${formatNaira(Math.abs(enrollment.carryIn.netKobo))} brought forward from ${enrollment.carryIn.sourceYear}` : 'Includes the configured AVON NHIS and program administrative fees'}</span></div></article>
       <article className="metric"><span className="metric__icon"><CheckCircle2 size={21} /></span><div><small>Verified payments</small><strong>{formatNaira(verified)}</strong><span>{pending > 0 ? `${formatNaira(pending)} awaiting review` : 'No pending payments'}</span></div></article>
-      <article className="metric"><span className="metric__icon"><CalendarDays size={21} /></span><div><small>Payment position</small><strong>{position.status === 'overpaid' ? formatNaira(position.overpaymentKobo) : position.status === 'underpaid' ? formatNaira(position.underpaymentKobo) : formatNaira(0)}</strong><span>{position.status === 'overpaid' ? 'Overpayment credit' : position.status === 'underpaid' ? 'Underpayment remaining' : 'Paid in full'}</span></div></article>
+      <article className="metric"><span className="metric__icon"><CalendarDays size={21} /></span><div><small>Payment position</small><strong>{position.status === 'overpaid' ? formatNaira(position.overpaymentKobo) : position.status === 'underpaid' ? formatNaira(position.underpaymentKobo) : formatNaira(0)}</strong><span>{position.status === 'overpaid' ? (assessment && financial.assessmentOwnNetKobo > 0 ? `Applied to ${assessment.name}` : 'Overpayment credit') : position.status === 'underpaid' ? 'Underpayment remaining' : 'Paid in full'}</span></div></article>
     </section>
 
     <section className="dashboard-grid">
       <article className="panel payment-progress">
         <div className="panel__heading"><div><p className="eyebrow">Payment position</p><h2>{position.status === 'overpaid' ? `${formatNaira(position.overpaymentKobo)} overpaid` : position.status === 'underpaid' ? `${formatNaira(position.underpaymentKobo)} remaining` : 'Paid in full'}</h2></div><StatusBadge status={pending > 0 ? 'Pending' : position.status} /></div>
         {premiumKobo > 0 && <FeeBreakdown premiumKobo={premiumKobo} rates={surchargeRates(snapshot!.period)} compact />}
-        <ProgressBar value={progress} label={`${formatNaira(verified)} of ${formatNaira(enrollment.totalKobo)}`} />
+        {enrollment.carryIn && <BroughtForwardBreakdown carry={enrollment.carryIn} totalKobo={enrollment.totalKobo} />}
+        <ProgressBar value={progress} label={`${formatNaira(verified + financial.carryInKobo)} of ${formatNaira(enrollment.totalKobo)}`} />
         <div className="account-strip">
           <div><small>Program payment account</small><strong>{currentInstruction.bank}</strong><span>{currentInstruction.beneficiary}</span></div>
           <div><small>Account number</small><strong>{currentInstruction.accountNumber}</strong></div>
@@ -73,6 +80,8 @@ export function DashboardPage() {
         <div className="panel__actions"><Link to="/enrollment">Review details <ArrowRight size={17} /></Link></div>
       </article>
     </section>
+
+    {carryOut && <CarryForwardPanel carry={carryOut} assessment={assessment} assessmentOwnDueKobo={financial.assessmentOwnDueKobo} assessmentPaidKobo={financial.assessmentPaidKobo} />}
 
     <section className="next-step-band">
       <ClipboardCheck size={24} />

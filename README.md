@@ -53,4 +53,5 @@ Real records, exports, receipts, credentials, and account configuration are excl
 - Payment proofs use a private storage bucket with row-level policies.
 - Every financial, enrollment, plan, period, account, and role change is audited.
 - Prices and fees are snapshotted per enrollment in integer kobo.
+- New subscribers can join after the renewal window. They pay the full annual total, and the months AVON does not bill are stored as a credit toward their next enrollment.
 - Prior years remain immutable after closure and can seed a new draft period.

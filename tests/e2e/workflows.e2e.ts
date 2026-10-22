@@ -68,6 +68,36 @@ test('existing subscriber can find and submit multiple payment confirmations', a
   await capture(page, testInfo, 'subscriber-payments');
 });
 
+test('subscribers see last year’s balance applied and what carries into next year', async ({ page, isMobile }, testInfo) => {
+  await useSubscriberWorkspace(page);
+  const year = new Date().getUTCFullYear();
+  // Last year's ₦18,000 credit is applied to this year's premium.
+  await expect(page.locator('.brought-forward')).toContainText(`Brought forward from ${year - 1}`);
+  await expect(page.locator('.brought-forward')).toContainText('+₦18,000.00');
+  const panel = page.getByRole('region', { name: `Your ${year + 1} enrollment` });
+  // The unpaid higher CAC contribution becomes only the one-time ₦15,000 fee next year.
+  await expect(panel).toContainText('One-time CAC registration fee');
+  await expect(panel).toContainText('−₦15,000.00');
+  await expect(panel).toContainText('only the one-time ₦15,000.00 CAC registration fee is charged');
+  await expect(panel).toContainText('Paying ₦33,000.00 now earns that credit instead');
+  await expect(panel).toContainText('Applied automatically');
+  await assertViewportIntegrity(page);
+  await capture(page, testInfo, 'subscriber-carry-forward');
+
+  // Paying the higher contribution in full turns the fee into the ₦18,000 credit once verified.
+  await page.getByLabel('Preview role').selectOption('owner');
+  await page.goto('/admin/enrollees');
+  const row = page.locator('.data-table__row').filter({ hasText: 'Ada' });
+  await expect(row.locator('.carry-cell')).toContainText('incl. ₦15,000.00 CAC fee');
+  await expect(row.locator('[data-label="HMO position"]')).toContainText(`incl. +₦18,000.00 from ${year - 1}`);
+  if (!isMobile) {
+    const cells = await page.locator('.admin-table span, .admin-table strong').evaluateAll(
+      (elements) => elements.filter((element) => element.scrollWidth > element.clientWidth + 1).map((element) => element.getAttribute('data-label')));
+    expect(cells).toEqual([]);
+  }
+  await assertViewportIntegrity(page);
+});
+
 test('payment confirmations cannot be dated in the future', async ({ page }) => {
   await useSubscriberWorkspace(page);
   await page.goto('/payments');
@@ -123,6 +153,78 @@ test('closing the period makes subscriber enrollment read only', async ({ page, 
   await navigate('Plans');
   await expect(page.getByText('The enrollment period is closed. Plan offerings remain available for reference.')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Enrollment closed' }).first()).toBeDisabled();
+});
+
+test('new subscribers keep joining after the renewal window with prorated AVON billing', async ({ page, isMobile }, testInfo) => {
+  // Demo state lives in memory, so every step after closing uses in-app navigation.
+  const navigate = async (name: string) => {
+    if (isMobile) await page.getByLabel('Open navigation').click();
+    await page.getByRole('navigation', { name: 'Primary navigation' }).getByRole('link', { name, exact: true }).click();
+  };
+  await page.goto('/admin/settings');
+  await expect(page.getByLabel('Keep accepting new subscribers after the renewal window closes')).toBeChecked();
+  await expect(page.locator('.period-intake')).toContainText('Renewal window open');
+  await page.locator('#period select').selectOption('closed');
+  page.once('dialog', async (dialog) => { expect(dialog.message()).toContain('New subscribers can still join as late enrollees'); await dialog.accept(); });
+  await page.getByRole('button', { name: 'Save period' }).click();
+  await expect(page.getByText('Enrollment period updated.')).toBeVisible();
+  await expect(page.locator('.period-intake')).toContainText('New subscribers are joining as late enrollees');
+  await assertViewportIntegrity(page);
+
+  // The applicant sees the late terms before submitting.
+  await page.evaluate(() => { window.history.pushState({}, '', '/join'); window.dispatchEvent(new PopStateEvent('popstate')); });
+  await page.getByRole('button', { name: 'Add principal' }).click();
+  await expect(page.getByRole('note').filter({ hasText: 'Joining after the' })).toContainText('You pay the full annual subscriber total');
+  await page.getByLabel('FUTO graduation year').fill('1996');
+  await page.getByLabel('Surname').fill('Obi');
+  await page.getByLabel('First name').fill('Chika');
+  await page.getByLabel('Date of birth').fill('1976-02-11');
+  await page.getByLabel('Mobile number').fill('08012345670');
+  await page.getByLabel('Residential address').fill('3 Aba Road');
+  await page.getByLabel('State').fill('Rivers');
+  await page.getByLabel('Town').fill('Port Harcourt');
+  await page.getByLabel('LGA').fill('Obio/Akpor');
+  await page.getByRole('button', { name: 'Save and continue' }).click();
+  await page.locator('.join-plan-options label').first().click();
+  const estimate = page.locator('.proration-breakdown');
+  await expect(estimate).toContainText('AVON coverage (expected)');
+  await expect(estimate).toContainText(/Estimated credit toward \d{4} enrollment/);
+  await assertViewportIntegrity(page);
+  await capture(page, testInfo, 'late-applicant-estimate');
+
+  // Administrators see the late terms before approving.
+  await page.evaluate(() => { window.history.pushState({}, '', '/admin/applications'); window.dispatchEvent(new PopStateEvent('popstate')); });
+  await expect(page.getByRole('note').filter({ hasText: 'Late enrollment.' })).toBeVisible();
+  page.once('dialog', async (dialog) => { expect(dialog.message()).toMatch(/This is a late enrollment: AVON coverage .* months\)/); await dialog.accept(); });
+  await page.getByRole('button', { name: 'Approve subscriber' }).click();
+  await expect(page.getByText('0 pending')).toBeVisible();
+
+  // The stored proration is visible, filterable, and correctable to match AVON's invoice.
+  await navigate('Enrollees');
+  const late = page.locator('.data-table__row').filter({ hasText: 'Tunde' });
+  await expect(late.locator('.late-badge')).toBeVisible();
+  await page.getByLabel('Filter status').selectOption('late');
+  await expect(page.locator('.data-table__row')).toHaveCount(1);
+  await late.getByRole('button', { name: 'Coverage' }).click();
+  await expect(page.locator('.modal .proration-breakdown')).toContainText('11 of 12 months');
+  const month = page.getByLabel('AVON coverage start month');
+  await month.fill(await month.getAttribute('min') ?? '');
+  await expect(page.locator('.modal .proration-breakdown')).toContainText('12 of 12 months');
+  await page.getByLabel('Reason for change').fill('');
+  await page.getByRole('button', { name: 'Save coverage start' }).click();
+  await expect(page.getByRole('alert')).toContainText('Enter the reason');
+  await page.getByLabel('Reason for change').fill('Matches AVON supplementary invoice.');
+  await assertViewportIntegrity(page);
+  await capture(page, testInfo, 'admin-coverage-start');
+  await page.getByRole('button', { name: 'Save coverage start' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(late.locator('.proration-credit')).toContainText('₦0.00 credit');
+
+  // The member sees their coverage and next-year credit.
+  page.once('dialog', (dialog) => dialog.accept());
+  await late.getByRole('button', { name: 'Act for' }).click();
+  await expect(page.getByRole('note').filter({ hasText: 'Late enrollment · AVON coverage' })).toBeVisible();
+  await assertViewportIntegrity(page);
 });
 
 test('existing subscriber can reach enrollment, plans, history, and account actions', async ({ page, isMobile }, testInfo) => {
@@ -344,10 +446,10 @@ test('administrator can access and operate administration tools', async ({ page,
   for (const column of ['Assessment payable', 'Assessment paid', 'Assessment net due']) {
     await expect(page.locator('.data-table__row').first().locator(`[data-label="${column}"]`)).toBeVisible();
   }
-  await expect(page.locator('.table-legend')).toContainText('CAC registration contribution');
+  await expect(page.locator('.table-legend').filter({ hasText: 'Assessment columns' })).toContainText('CAC registration contribution');
   // The swept HMO variance is rendered, not left to a hover title that touch devices lack.
   await expect(page.locator('.data-table__row').first().locator('[data-label="Assessment net due"]'))
-    .toContainText('incl. ₦239,246.59 HMO shortfall');
+    .toContainText('incl. ₦221,246.59 HMO shortfall');
   const cells = await page.locator('.admin-table span, .admin-table strong').evaluateAll(
     (elements) => elements.filter((element) => element.scrollWidth > element.clientWidth + 1).map((element) => element.getAttribute('data-label')));
   expect(cells).toEqual([]);

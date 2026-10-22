@@ -100,7 +100,7 @@ export function EnrollmentPage() {
 
   return <>
     <PageHeader eyebrow={`${draft.year} enrollment · Step 2 of 3`} title="Confirm who is covered" description="Review one person at a time. Saved details remain editable until enrollment closes." actions={<StatusBadge status={draft.status} />} />
-    {!editable && <div className="info-banner"><Info size={18} /><span>This enrollment period is closed. Details remain available as read-only records.</span></div>}
+    {!editable && <div className="info-banner"><Info size={18} /><span>{original.proration ? 'You joined after the renewal window, so your approved details are read-only. Contact a program administrator if anything needs to change.' : 'This enrollment period is closed. Details remain available as read-only records.'}</span></div>}
     {error && <p className="form-error" role="alert">{error}</p>}
     <div className="enrollment-layout">
       <form className="enrollment-form" onSubmit={(event: FormEvent) => { event.preventDefault(); void save(true); }}>

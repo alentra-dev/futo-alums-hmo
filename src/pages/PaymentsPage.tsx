@@ -2,11 +2,15 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Banknote, ClipboardCheck, Copy, FileUp, Info, ReceiptText } from 'lucide-react';
 import { FeeBreakdown } from '../components/FeeBreakdown';
+import { LateEnrollmentNotice } from '../components/LateEnrollmentNotice';
+import { ProrationBreakdown } from '../components/ProrationBreakdown';
+import { coverageTermStart } from '../lib/proration';
+import { BroughtForwardBreakdown, CarryForwardPanel } from '../components/CarryForwardPanel';
 import { PaymentSubmissionForm } from '../components/PaymentSubmissionForm';
 import { Button, EmptyState, Modal, PageHeader, ProgressBar, StatusBadge } from '../components/ui';
 import { useApp } from '../context/AppContext';
 import { workspaceEnrollment } from '../lib/enrollmentAccess';
-import { assessmentForEnrollment, enrollmentFinancialPosition } from '../lib/financialPosition';
+import { assessmentForEnrollment, enrollmentFinancialPosition, nextEnrollmentCarryForward, registrationFeeKobo } from '../lib/financialPosition';
 import { formatDate, formatDateTime } from '../lib/format';
 import { formatNaira } from '../lib/money';
 import { paymentInstruction } from '../lib/paymentInstruction';
@@ -21,6 +25,7 @@ export function PaymentsPage() {
   const defaults = snapshot!.assessments.find((item) => item.id === assessment?.id);
   const usesDefaultTerms = assessment && defaults && assessment.amountKobo === defaults.amountKobo && assessment.feePortionKobo === defaults.feePortionKobo && assessment.futureCreditKobo === defaults.futureCreditKobo && assessment.creditYear === defaults.creditYear;
   const financial = enrollmentFinancialPosition(enrollment, snapshot!.payments, assessment, adjustment);
+  const carryOut = nextEnrollmentCarryForward(enrollment, snapshot!.payments, registrationFeeKobo(snapshot!.assessments), assessment, adjustment, snapshot!.period.carryForwardEnabled !== false);
   const selectedPlan = snapshot!.plans.find((plan) => plan.id === enrollment.planId);
   const premiumKobo = selectedPlan ? (enrollment.category === 'family' ? selectedPlan.familyPremiumKobo : selectedPlan.individualPremiumKobo) : 0;
   const payments = useMemo(() => snapshot!.payments.filter((item) => item.enrollmentId === enrollment.id), [snapshot, enrollment.id]);
@@ -49,15 +54,19 @@ export function PaymentsPage() {
         ? <Button icon={<FileUp size={18} />} onClick={() => setOpen(primaryPurpose)}>{primaryLabel}</Button>
         : <Button icon={<ClipboardCheck size={18} />} onClick={() => navigate('/enrollment')}>Complete enrollment first</Button>}
     />
+    {enrollment.proration && <LateEnrollmentNotice proration={enrollment.proration} termStart={coverageTermStart(snapshot!.period)} />}
     <div className="payment-summary-grid">
       <article className="panel amount-due">
         <p className="eyebrow">Total payable</p><strong>{formatNaira(enrollment.totalKobo)}</strong>
         <span>Includes the configured AVON NHIS and program administrative fees</span>
         {premiumKobo > 0 && <FeeBreakdown premiumKobo={premiumKobo} rates={surchargeRates(snapshot!.period)} compact />}
-        <ProgressBar value={enrollment.totalKobo ? (verified / enrollment.totalKobo) * 100 : 0} />
+        {enrollment.proration && <ProrationBreakdown proration={enrollment.proration} termStart={coverageTermStart(snapshot!.period)} nhisFeeBasisPoints={surchargeRates(snapshot!.period).nhisFeeBasisPoints} compact />}
+        {enrollment.carryIn && <BroughtForwardBreakdown carry={enrollment.carryIn} totalKobo={enrollment.totalKobo} />}
+        <ProgressBar value={enrollment.totalKobo ? ((verified + financial.carryInKobo) / enrollment.totalKobo) * 100 : 0} />
         <div><span>Verified {formatNaira(verified)}</span><span>{position.status === 'overpaid' ? `Overpayment ${formatNaira(position.overpaymentKobo)}` : position.status === 'underpaid' ? `Underpayment ${formatNaira(position.underpaymentKobo)}` : 'Paid in full'}</span></div>
         <StatusBadge status={position.status} />
         {pending > 0 && <p className="pending-note"><Info size={16} />{formatNaira(pending)} is awaiting administrator review.</p>}
+        {assessment && position.status === 'overpaid' && financial.assessmentOwnNetKobo > 0 && <p className="pending-note"><Info size={16} />{formatNaira(Math.min(position.overpaymentKobo, financial.assessmentOwnNetKobo))} of the overpayment is applied to your {assessment.name}.</p>}
         {canUploadPayment && <div className="panel__actions"><Button variant={canUploadAssessment ? 'secondary' : 'primary'} icon={<FileUp size={17} />} onClick={() => setOpen('premium')}>Upload HMO payment</Button></div>}
       </article>
     {assessment && <section className="panel assessment-panel">
@@ -90,6 +99,7 @@ export function PaymentsPage() {
         </dl>
       </article>
     </div>
+    {carryOut && <CarryForwardPanel carry={carryOut} assessment={assessment} assessmentOwnDueKobo={financial.assessmentOwnDueKobo} assessmentPaidKobo={financial.assessmentPaidKobo} />}
     <section className="table-section">
       <div className="section-title"><h2>Payment history</h2><span>{payments.length} confirmations</span></div>
       {payments.length ? <div className="data-table">

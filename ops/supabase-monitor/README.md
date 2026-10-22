@@ -48,7 +48,9 @@ npm run monitor:deploy
 `monitor:probe` performs a real production read with no subscriber data in its output.
 `--with-heartbeat` also sends the outcome to the configured Healthchecks.io check.
 Closed enrollment is healthy: `acceptingApplications: false`, a null period, and no
-plans are valid. A malformed HTTP-200 response, authorization error, network timeout,
+plans are valid. Late enrollment is also healthy: a `closed` period while
+`acceptingApplications` is true, but only with `enrollmentMode: 'late'` (migration
+`202610220023`). Deploy the Worker with this validator before applying that migration. A malformed HTTP-200 response, authorization error, network timeout,
 or exhausted retries is a failure.
 
 Deployment requires both database and heartbeat success. The deploy script binds

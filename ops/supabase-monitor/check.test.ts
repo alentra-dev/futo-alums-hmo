@@ -9,12 +9,13 @@ const env: MonitorEnvironment = {
 };
 const closed = { timezone: 'Africa/Lagos', acceptingApplications: false, period: null, plans: [] };
 const open = { timezone: 'Africa/Lagos', acceptingApplications: true, period: { id: 'synthetic-period', year: 2026, status: 'open', startsAt: '2026-06-01', endsAt: '2026-10-31' }, plans: [] };
+const late = { ...open, enrollmentMode: 'late', period: { ...open.period, status: 'closed', endsAt: '2026-09-05' } };
 const json = (value: unknown) => new Response(JSON.stringify(value), { headers: { 'Content-Type': 'application/json' } });
 const sleep = vi.fn(async () => {});
 afterEach(() => { vi.restoreAllMocks(); sleep.mockClear(); });
 
 describe('external Supabase database check', () => {
-  it.each([closed, open])('accepts healthy open and closed enrollment responses', async payload => {
+  it.each([closed, open, late])('accepts healthy open, closed, and late enrollment responses', async payload => {
     const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValueOnce(json(payload));
     expect(await probeDatabase(env, { fetch, sleep })).toMatchObject({ ok: true, attempts: 1, httpStatus: 200 });
     expect(fetch).toHaveBeenCalledWith(`${SUPABASE_URL}/rest/v1/rpc/get_public_join_config`, expect.objectContaining({
@@ -57,7 +58,7 @@ describe('external Supabase database check', () => {
     expect(fetch.mock.calls.every(([,init]) => init?.signal instanceof AbortSignal)).toBe(true);
   });
 
-  it.each([{}, { ...closed, acceptingApplications: 'false' }, { ...closed, plans: null }, { ...closed, period: {} }, { ...open, period: null }])('rejects a misleading HTTP-200 payload', async payload => {
+  it.each([{}, { ...closed, acceptingApplications: 'false' }, { ...closed, plans: null }, { ...closed, period: {} }, { ...open, period: null }, { ...late, enrollmentMode: 'regular' }])('rejects a misleading HTTP-200 payload', async payload => {
     const fetch = vi.fn<typeof globalThis.fetch>().mockImplementation(async () => json(payload));
     expect(await probeDatabase(env, { fetch, sleep })).toMatchObject({ ok: false, attempts: 3, reason: 'invalid_response' });
   });

@@ -1,5 +1,6 @@
 import type { ProgramSnapshot } from '../lib/types';
 import { nairaToKobo, planTotalKobo } from '../lib/money';
+import { avonProration, firstOfMonth } from '../lib/proration';
 
 const currentIso = new Date().toISOString();
 
@@ -10,6 +11,12 @@ const demoYear = new Date().getUTCFullYear();
 const demoPeriodStart = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString();
 const demoPeriodEnd = new Date(Date.now() + 45 * 24 * 60 * 60 * 1000).toISOString();
 const daysAgo = (days: number) => new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+// The twelve-month AVON term starts on the first of the month the preview window opened.
+const demoCoverageStart = firstOfMonth(demoPeriodStart);
+const demoLateStart = (() => {
+  const [year, month] = demoCoverageStart.split('-').map(Number);
+  return firstOfMonth(new Date(Date.UTC(year, month, 1)).toISOString());
+})();
 
 export const planOfferings = [
   {
@@ -155,6 +162,9 @@ export const demoSnapshot: ProgramSnapshot = {
     status: 'open',
     nhisFeeBasisPoints: 100,
     programFeeBasisPoints: 200,
+    coverageStartsOn: demoCoverageStart,
+    lateEnrollmentOpen: true,
+    carryForwardEnabled: true,
   },
   plans: planOfferings,
   enrollments: [
@@ -173,6 +183,8 @@ export const demoSnapshot: ProgramSnapshot = {
       totalKobo: familyTotal,
       consentedAt: currentIso,
       completeness: 100,
+      // Last year's fully paid higher CAC contribution carried its ₦18,000 credit forward.
+      carryIn: { sourceYear: demoYear - 1, creditYear: demoYear, premiumBalanceKobo: 0, assessmentBalanceKobo: nairaToKobo(18_000), prorationCreditKobo: 0, overpaymentAppliedKobo: 0, netKobo: nairaToKobo(18_000) },
     },
     {
       id: 'enrollment-late-joiner',
@@ -186,6 +198,8 @@ export const demoSnapshot: ProgramSnapshot = {
       totalKobo: planTotalKobo(planOfferings[0].individualPremiumKobo),
       consentedAt: currentIso,
       completeness: 100,
+      // Joined one month into the AVON term, so AVON bills eleven months.
+      proration: { ...avonProration(planOfferings[0].individualPremiumKobo, 100, demoCoverageStart, demoLateStart, demoYear + 1)!, note: 'Matches the AVON supplementary invoice.' },
     },
   ],
   payments: [

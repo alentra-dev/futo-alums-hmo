@@ -1,6 +1,6 @@
 # FUTO Alums HMO Program: Durable Project Context
 
-Last updated: 2026-10-16
+Last updated: 2026-10-22
 
 This document is the persistent handoff for engineers and LLM coding agents working on this repository. Read it before changing the application and update it whenever code, schema, business rules, deployment, configuration, or production operating state changes. `AGENTS.md` makes that maintenance requirement explicit.
 
@@ -11,7 +11,7 @@ The FUTO Alums HMO Program is a mobile-first group healthcare enrollment and adm
 The application supports:
 
 - existing-subscriber renewal using preloaded historical details;
-- new-subscriber applications and lightweight administrator approval;
+- new-subscriber applications and lightweight administrator approval, accepted year-round: within the renewal window and, after it, as late enrollments with AVON proration and a next-year credit;
 - one login account managing one or more principal-member households;
 - individual and family plan enrollment;
 - principal and dependent demographic capture;
@@ -49,6 +49,8 @@ The GitHub repository is public. The application code may be public; all real pe
 - `src/lib/types.ts`: shared domain types and snapshot contracts.
 - `src/lib/money.ts`: integer-kobo calculations, fee rounding, and payment-position helpers.
 - `src/lib/financialPosition.ts`: HMO premium versus program-assessment allocation and balance calculations.
+- `src/lib/proration.ts`: AVON coverage term, late-enrollment proration, and intake-mode helpers (mirrors migration `202610220023`).
+- `src/components/ProrationBreakdown.tsx` and `src/components/LateEnrollmentNotice.tsx`: shared late-enrollment disclosures.
 - `src/lib/paymentInstruction.ts`: composes the single program account with the transfer reference for each payment purpose.
 - `src/lib/export.ts`: summary, full administrator, and AVON workbook generation.
 - `src/lib/enrollmentAccess.ts`: account-to-household selection, subscriber isolation helpers, and `workspaceEnrollment` for administrators acting for a subscriber.
@@ -112,6 +114,12 @@ Subscriber lifecycle:
 8. Administrators close the period. Subscriber enrollment data becomes read-only.
 9. Administrators generate the selected year's provider and internal reports.
 
+### 5.1 Continuous (late) enrollment
+
+The renewal window closes, but AVON accepts new members for the rest of the coverage term, so new-subscriber applications never stop while a term is running. `public.application_intake` picks the period: the open renewal window first; otherwise the latest period that is closed or past its `ends_at`, has `late_enrollment_open`, and whose AVON term has not ended. Existing subscribers' enrollments stay read-only after the window; only new subscribers join late. Administrators can switch late enrollment off per period in **Program settings → Enrollment period**.
+
+Approval after the renewal window records `enrollments.avon_coverage_start` as the approval month in the program time zone (never before the term start). Administrators correct it to match AVON's invoice through **Enrollees → Coverage** (`set_enrollment_coverage_start`, admin-only, reason required, audited). Approval also assigns the active program assessment at its default (new-enrollee) terms, inside or outside the window; this replaces the 2026-10-10 rule that approval did not assign an assessment.
+
 New-application duplicate review flags likely matches using email, phone, and date of birth. This is an administrator aid, not automatic rejection. The alumni WhatsApp group provides a practical human verification path.
 
 Family coverage is limited by current AVON rules to principal, spouse, and up to four eligible children, for a maximum of five dependents. Dependents can be added and removed while the enrollment period is editable. Historical years are not changed when a dependent is removed from a current draft.
@@ -162,7 +170,7 @@ The first configured assessment supports CAC/entity-registration costs. Its 2026
 
 Migration `202610100022` adds individual financial terms to `enrollment_assessments`. Existing assignments are backfilled from verified restored defaults. A validation trigger snapshots defaults for legacy inclusion calls and validates program/period matching, nonnegative amounts, fee-plus-credit equality, nonnegative adjusted payable, and a future credit year. `set_enrollment_assessment_terms` is admin-only, requires all terms and a reason, and preserves the existing audit trigger. Subscriber displays and internal exports resolve assignment terms, including an explicit zero credit; optional frontend fields allow reading older workspaces during deployment. Shared names, descriptions, due dates, references, and visibility still follow the assessment definition. Subscriber disclosures omit the shared description when it conflicts with individual financial terms.
 
-Application approval does not automatically assign an assessment. Administrators explicitly include the new enrollee and select the appropriate individual terms through **Enrollees → Adjust**. Signed adjustments change the payable but do not change the assigned future credit.
+Assessment defaults are the **new-enrollee terms**. From migration `202610220023`, approval assigns the active assessment at those defaults automatically. For 2026–27 the defaults are a ₦15,000 one-time CAC registration fee with no future credit. Earlier enrollees keep their snapshotted higher terms. **Enrollees → Adjust** still sets individual exceptions. Signed adjustments change the payable but do not change the assigned future credit.
 
 The net assessment due for an enrollee is:
 
@@ -177,9 +185,48 @@ This combined figure is a **reconciliation position, not a payment instruction**
 - `assessmentOwnNetKobo` / `assessmentOwnDueKobo`: `assessment base + admin adjustment - verified assessment payments`, which is what the subscriber transfers under the assessment reference;
 - `premiumVarianceKobo`: the swept HMO under/overpayment, which is transferred under the HMO premium reference.
 
-`assessmentOwnNetKobo + premiumVarianceKobo === assessmentNetKobo` always holds. Subscriber-facing screens collect `assessmentOwnDueKobo`, disclose the premium variance separately, and show the combined position only as context. Administrator reports and exports continue to use `assessmentNetKobo`.
+`assessmentOwnNetKobo + premiumVarianceKobo === assessmentNetKobo` always holds. Since 2026-10-22, `assessmentOwnDueKobo` is `max(0, assessmentOwnNetKobo − HMO overpayment)`. A member who sent the premium and the assessment in one HMO-referenced transfer is therefore not asked to pay the assessment again. A shortfall never raises it, because a shortfall belongs under the HMO reference. Subscriber-facing screens collect `assessmentOwnDueKobo`, disclose the premium variance separately, and show the combined position only as context. Administrator reports and exports continue to use `assessmentNetKobo`.
 
-### 7.3 One account, many references
+### 7.3 Late-enrollment proration and next-year credit
+
+AVON's term for coverage year N is twelve months from 1 September N through 31 August N+1 (`enrollment_periods.coverage_starts_on`, default `N-09-01`, editable in settings). A late member pays the **full** annual subscriber total (premium + 1% NHIS + 2% program fee, all on the full premium). AVON bills the program only for the months from the coverage start month through August:
+
+- billed months = 12 − months elapsed from the term start to the coverage start month;
+- prorated premium = round(full premium × billed months / 12), to the kobo;
+- prorated NHIS = round(prorated premium × NHIS rate);
+- proration credit = (full premium + full NHIS) − (prorated premium + prorated NHIS).
+
+The 2% program administrative fee is charged on the full premium, retained, and never part of the credit. Worked example matching AVON's supplementary-invoice method (Plus family annual rate ₦264,083, coverage Oct 2026 – Aug 2027): 11 months, ₦242,076.08 + ₦2,420.76 = ₦244,496.84 billed, credit ₦22,226.99 toward 2027.
+
+The trigger `apply_enrollment_proration` stores `avon_billed_months`, `avon_prorated_premium_kobo`, `avon_prorated_nhis_kobo`, and `proration_credit_kobo` on every insert or update. A check constraint keeps them consistent with the stored premium and NHIS, and a start month outside the term is refused. The trigger's name sorts after `apply_enrollment_surcharges`, so it sees the final NHIS. `src/lib/proration.ts` reproduces the same calculation for previews and must stay identical.
+
+### 7.3.1 Automatic next-year carry-forward
+
+Migration `202610220024` carries each **submitted or closed** enrollment's balance into the same household's enrollment for the next coverage year. There it is applied automatically to the HMO premium position (`enrollmentFinancialPosition` counts `carryIn.netKobo` alongside verified premium payments). Balances are signed, and a positive balance is a credit:
+
+- **Premium balance** = verified HMO payments + this year's carry-in − subscriber total. This captures exact over- and underpayments.
+- **Assessment balance** = verified assessment payments − the assigned one-time fee − the signed adjustment.
+  - A fully paid ₦33,000 contribution carries its ₦18,000 credit.
+  - An unpaid one owes only the ₦15,000 fee, not the higher amount.
+  - A partly paid one carries the difference either way.
+  - A submitted enrollee never assigned the assessment owes the active assessment's default one-time fee.
+- **Proration credit** = the stored late-enrollment credit.
+- An HMO overpayment first covers an assessment balance owed (`overpaymentAppliedKobo`). This is how the late member's single combined transfer settles both obligations.
+- **Net** = the sum of the three, applied as one figure.
+
+Design properties:
+
+- **Derived live**, not snapshotted. A late-verified prior-year payment updates the next year's position. Each balance is applied exactly once because a household has one enrollment per period, and the carry-in feeds that year's own carry-forward, so balances chain year to year.
+- `enrollment_periods.carry_forward_enabled` is false for imported years (< 2026), so nothing older than 2026 ever carries.
+- Pending and rejected payments, and draft enrollments, never carry anything.
+- A balance owed (for example the ₦15,000 CAC fee) is collected in the next year as part of the HMO payable, under the HMO reference. The carry-forward components keep it distinguishable in reports and exports.
+- When a 2027 assessment is configured, do not assign it to rolled-over households for the registration fee; their fee is already carried forward. New 2027 applicants get it at approval.
+
+`public.enrollment_carry_forward` and `public.enrollment_carry_in` are internal: execution is revoked from clients. `get_enrollment_carry_forwards(p_period_id)` is the authenticated side-car read, scoped by `can_access_household`. `nextEnrollmentCarryForward` in `src/lib/financialPosition.ts` mirrors the SQL. `carryForwardMigration.test.ts` and `proration.test.ts` assert the same cases and values, so keep them identical.
+
+Subscribers see a **Your {next year} enrollment** panel on Dashboard and Payments with the itemised carry-forward. A member with an unpaid higher CAC contribution is told that only the one-time ₦15,000 CAC registration fee is charged next year if it stays unpaid, and that paying now earns the ₦18,000 credit instead. Members who paid see their accurate credit. In the following year, the payable shows **Brought forward from {year}**, itemised, together with the payable after that balance.
+
+### 7.4 One account, many references
 
 `src/lib/paymentInstruction.ts` composes every payment instruction shown to a user: bank details always come from the single program `paymentAccount`, and only `referencePrefix` varies by purpose. Use it rather than reading an account off an assessment.
 
@@ -190,6 +237,23 @@ The migration refuses to run if any assessment still holds bank details differin
 HMO and assessment evidence use distinct, labeled upload actions. Both permit multiple confirmations. The administrator payment-review screen and exports identify the purpose.
 
 ## 8. 2026 operational state
+
+Read-only verification on 2026-10-22, before migration `202610220023`:
+
+- The 2026 period was `open` after a temporary reopen on 2026-10-10. Its audit history shows the original renewal window closed 2026-09-05 23:59 WAT, after an extension of the 2026-08-31 close.
+- The seventh 2026 enrollment is the one late member, approved during that reopen, with fee-only ₦15,000 CAC terms already assigned.
+- Their single verified transfer covered the full subscriber total plus the CAC fee, and the user confirmed the member has fully paid.
+- AVON's supplementary invoice bills them from October 2026 for 11 months.
+- The six earlier assignments keep their original terms, including the 2027 credit. The shared defaults were still the original contribution and credit.
+- The exact identifiers, amounts and invoice reference are recorded only under ignored `.private/`.
+
+Pending deployment action, private and ignored: `.private/apply-late-enrollment.ts` (preview, then `--apply`) does three things and verifies everything else in the period is unchanged:
+
+1. Restores the original 2026-09-05 close and closes the period.
+2. Records the late member's AVON coverage from 2026-10-01.
+3. Sets the assessment defaults to the ₦15,000 fee-only new-enrollee terms.
+
+Update this section once it has run.
 
 Read-only verification on 2026-10-10: the 2026 period has been temporarily reopened and contains seven enrollments. The latest approved/submitted enrollment has no assessment assignment or payment records. Six earlier assessment assignments remain intact. Configuration audit history confirms a temporary reduction of the shared contribution/credit and a subsequent restoration to the original terms. Real account identifiers and exact operational mappings remain only under ignored `.private/` paths. The period must remain open until the administrator finishes the temporary enrollment work; this change does not close it.
 
@@ -224,6 +288,7 @@ Exports:
 
 - `Summary`: principal member only, selected plan/category, total owed, verified HMO paid, exact premium position, assessment paid/due, and future credit as applicable.
 - `Admin full export`: all provider enrollment fields plus internal financial and administrative fields.
+- Admin full and summary exports also carry late-enrollment and carry-forward columns: late flag, AVON coverage start, billed months, prorated premium and NHIS, proration credit, the balance brought forward from the prior year, and the carry-forward HMO balance, CAC balance and net. These are internal and excluded from the AVON export. AVON columns still show the annual premium; AVON's own supplementary invoice states the prorated bill.
 - `AVON export`: provider-required enrollment rows only. It must exclude internal payment, program fee/accounting, assessment, audit, and `FUTO HMO FULL PAYMNT` fields.
 
 Do not include dependent names in the high-level program summary. Dependents appear only where required for full administration/provider submission.
@@ -264,6 +329,13 @@ Major stages:
 - `202609150020`: consent provenance columns on `enrollments`, the `sync_consent_provenance` trigger, `record_offline_consent`, and the `get_consent_records` side-car read. Deployed to production 2026-09-16.
 - `202609160021`: dropped the duplicate assessment bank columns, leaving `reference_prefix`, and rebuilt `get_financial_workspace` and `upsert_financial_assessment` around the single program account. Guarded against divergent stored accounts.
 - `202610100022`: snapshots individual assessment contribution, fee, credit, and year; adds validated admin-only individual-term mutation and period-scoped workspace fields. Deployed to production 2026-10-10.
+
+- `202610220024`: automatic next-year carry-forward: `carry_forward_enabled` on periods (false before 2026), the internal `enrollment_carry_forward` and `enrollment_carry_in` functions, and the side-car read `get_enrollment_carry_forwards`. Wrapped in `BEGIN`/`COMMIT`. Deployed with `202610220023`; see the change log.
+- `202610220023`: continuous late enrollment. It adds `coverage_starts_on` and `late_enrollment_open` to periods, and coverage-start and stored-proration columns to enrollments, with the `apply_enrollment_proration` trigger. It also adds:
+  - the internal helpers `application_intake`, `late_coverage_start`, and `period_after_renewal_window`;
+  - the admin-only `set_enrollment_coverage_start` and the side-car read `get_enrollment_coverage`.
+
+  It rebuilds `get_public_join_config` (adds `enrollmentMode`, coverage dates, and the new-enrollee assessment amounts), `create_subscriber_application`, `get_admin_subscriber_applications`, `review_subscriber_application` (records the late coverage start and auto-assigns the assessment), and `update_enrollment_period`. It is wrapped in `BEGIN`/`COMMIT`. **Not yet deployed as of 2026-10-22.**
 
 When adding a migration, document its purpose here and state whether it has been deployed to production.
 
@@ -307,8 +379,8 @@ Demo-mode fixtures in `src/data/demo.ts` derive the preview period from the curr
 
 Current baseline as of this document update:
 
-- 17 Vitest files, 104 unit/database/monitor tests passing (including embedded PostgreSQL migration and authorization tests);
-- 22 Playwright scenarios passing: eleven workflows at desktop and mobile sizes;
+- 21 Vitest files, 157 unit/database/monitor tests passing, including embedded PostgreSQL migration, authorization, and workerd runtime tests. `src/test/migrationDatabase.ts` replays **every** migration into PGlite with synthetic auth/storage stubs, patching only the 2025 Vital data assertion in `202608250012`. It is used by `lateEnrollmentMigration.test.ts` and `carryForwardMigration.test.ts`.
+- 26 Playwright scenarios passing: thirteen workflows at desktop and mobile sizes;
 - production build passing;
 - Vite reports large chunks for the chart/core/Excel bundles; this is a performance warning, not a failed build.
 
@@ -352,7 +424,7 @@ Supabase secrets such as email-provider credentials are configured in Supabase, 
 ### External database monitor
 
 `ops/supabase-monitor/` contains a Cloudflare scheduled Worker, focused tests, safe
-probe/deployment commands, and the operational guide. Its four-daily UTC schedule
+probe/deployment commands, and the operational guide. Since 2026-10-22 the validator also accepts a `closed` period while `acceptingApplications` is true, but only with `enrollmentMode: 'late'`. **Redeploy the Worker before applying migration `202610220023`**, or the first late-enrollment response alerts as invalid. Its four-daily UTC schedule
 is `17 1,7,13,19 * * *` (02:17, 08:17, 14:17, 20:17 Africa/Lagos). It makes a fresh
 public `get_public_join_config` database request and validates open or closed
 enrollment responses. Only a publishable key is used; no authentication activity,
@@ -390,7 +462,8 @@ Administrators can:
 - review evidence, verify/reject payments, and upload evidence on behalf of a subscriber;
 - configure the program time zone;
 - configure NHIS and program fee rates with recalculation controls;
-- configure enrollment periods and plan offerings;
+- configure enrollment periods, the AVON coverage term start, whether new subscribers may join after the renewal window, and plan offerings;
+- review late applicants with an expected proration preview, and correct a late member's AVON coverage start month to match AVON's invoice;
 - configure the HMO payment account;
 - configure a period assessment and the transfer reference that identifies its payments;
 - include/exclude an enrollee from an assessment and enter a signed adjustment/note;
@@ -403,7 +476,10 @@ Keep `docs/ADMIN_CHEATSHEET.md` aligned whenever an administrator workflow or la
 
 ## 16. Known follow-ups and design cautions
 
-- A future-year credit now derives from individual assessment terms. Before 2027 enrollment opens, implement or confirm a durable credit-ledger/application mechanism so settled credits are applied exactly once.
+- Carry-forwards are derived live (§7.3.1). If the program ever needs a balance frozen at a cut-off date, for example for audited year-end statements, add an explicit snapshot. Until then, a correction to a prior-year payment intentionally changes the next year's position, and is itself audited.
+- A household that skips a year (no submitted enrollment in the immediately preceding year) carries nothing. Older balances do not jump a year.
+- A former member returning after lapsing joins as a new applicant and is flagged by duplicate review. Approving them creates a new household, so reconcile such cases manually.
+- `get_portal_snapshot` still prefers the latest coverage year when no period is open. Once a 2027 period is created as `scheduled`, verify that late 2026 members still see their 2026 enrollment and payments.
 - The assessment model currently supports the active operational need. If multiple simultaneous assessments become common, replace any UI assumptions that select the first matching assessment with explicit selection and aggregation.
 - Production reconciliation uses a system actor unless explicitly run through an authenticated admin operation. Audit display should make that distinction clear.
 - Continue mobile-first testing. Most users access the portal by phone, and payment upload discoverability is a critical support burden.
@@ -436,6 +512,79 @@ Migration `202609160021` completes the single-account cleanup: the duplicate `be
 The migration aborts if any stored assessment account still differs from the program payment account, because the drop cannot be undone.
 
 ## 17. Change log for this handoff
+
+### 2026-10-22 (automatic next-year carry-forward)
+
+The user asked for next-year credits to be applied automatically, both proration credits and the credits of members who paid the higher CAC, with exact premium over- and underpayments factored in. Subscribers are now told that an unpaid CAC becomes a ₦15,000 charge next year, and members who paid see their accurate credit.
+
+Implemented migration `202610220024` (§7.3.1); the carry-in is applied in `enrollmentFinancialPosition` and in all subscriber and admin views. UI changes:
+
+- the subscriber **Your {next year} enrollment** panel, wording a balance still owed as "carried into {year} unless paid";
+- the **Brought forward** breakdown on the following year's payable;
+- the admin **Carry to {next year}** column, legend, and HMO-position note.
+
+Export columns now show brought-forward and carry-forward balances, replacing the earlier informational next-enrollment columns. The demo shows Ada with an ₦18,000 credit brought forward. The shared PGlite replay helper moved to `src/test/migrationDatabase.ts`.
+
+Validation on 2026-10-22: `npm run check` passed (157 tests in 21 files), and `npm run test:e2e` passed all 26 scenarios. The PGlite suite covers each carry-forward rule on synthetic households:
+
+- a fully paid higher CAC, an unpaid one, and a partial payment with a pending confirmation;
+- premium over- and underpayment;
+- the late member's single combined transfer;
+- an unassigned enrollee, a draft, and imported 2025 data;
+- a payment verified late, and chaining into 2028;
+- isolation between subscribers, and refusal of anonymous and internal-function calls.
+
+The private production script additionally asserts that the late member carries exactly +₦22,226.99 into 2027.
+
+### 2026-10-22 (continuous late enrollment and AVON proration)
+
+AVON keeps enrolling new members after the program's renewal window and bills them pro rata by month joined (a supplementary invoice covering Oct 2026 – Aug 2027 bills 11 of 12 months). The user asked for the following:
+
+- New enrollments are always allowed.
+- Late members are charged the full amount.
+- The program's 2% fee stays on the full premium.
+- The difference between the full premium + 1% NHIS and AVON's prorated premium + NHIS is stored as a credit toward the member's next enrollment.
+- New enrollees pay a one-time ₦15,000 CAC fee with no credit.
+- Earlier enrollees who never paid their higher CAC owe ₦15,000 when they re-enroll.
+
+What was implemented:
+
+- Migration `202610220023`, described in §5.1, §7.3 and §11.
+- Join and home pages: a late-enrollment disclosure with an expected proration and the ₦15,000 registration-fee disclosure.
+- Applications: a late banner, proration preview and approval prompt.
+- Enrollees: a late badge and credit, a **Late enrollees** filter, and a **Coverage** editor with a live preview.
+- Settings: the coverage-term start, the late-enrollment toggle and a live intake status.
+- Subscriber Dashboard and Payments: a late-enrollment notice and the AVON breakdown.
+- Admin overview: the intake status.
+- Internal export columns.
+- Fixed `assessmentOwnDueKobo` so an HMO overpayment that already covers the assessment is not requested again. This affected the late member, who paid both amounts in one transfer.
+- Fixed unstyled `.checkbox-line` checkboxes, which rendered full-width in modals.
+- Updated the monitor validator.
+
+Validation on 2026-10-22: `npm run check` passed (lint, 139 tests in 20 files, monitor type checks, TypeScript, production build; existing chunk-size warnings only). `npm run test:e2e` passed all 24 desktop/mobile scenarios, including the new late-enrollment journey.
+
+The PGlite suite proves the following:
+
+- the invoice figures exactly;
+- the full-term and out-of-term cases;
+- recomputation after a surcharge-rate change;
+- refusal of a term change that would orphan a late start;
+- regular and late intake, the late-enrollment switch, and term expiry;
+- late and regular approvals, including CAC auto-assignment;
+- the audited admin coverage change, with subscriber and anonymous calls refused;
+- isolation of coverage reads for two unrelated households, with the admin note hidden from subscribers.
+
+Deployment sequence, all pending:
+
+1. Push `main` and monitor GitHub Pages. The frontend degrades to full-term readings until the migration exists.
+2. `npm run monitor:deploy` with the updated validator.
+3. Dispatch the Supabase workflow and confirm the preview lists only `202610220023`.
+4. Run `.private/apply-late-enrollment.ts` in preview mode, then with `--apply`.
+5. Re-verify the join config, the late member's stored proration, and the unchanged rows, then update §8.
+
+### 2026-10-19 (scheduled monitor history review)
+
+Read-only provider verification confirmed the unchanged Worker, secret binding names, enabled invocation logs, and only the intended four-daily cron. After the user added Workers Observability access to the existing account-scoped token, a temporary/dry telemetry query retrieved execution history. As of 14:48 UTC, eleven routine invocations from 2026-10-16 19:17 UTC through 2026-10-19 07:17 UTC each had outcome `ok`, HTTP 200 on the first database attempt, and heartbeat `delivered` (database durations 649–1,864 ms). All four expected runs on October 17 and October 18 were present. The twelfth expected invocation, October 19 at 13:17 UTC, was absent from both the full and narrow-time-range Cloudflare log queries, but the user independently supplied Healthchecks.io event #93: received at 13:17:47.638948 UTC with `ok: true`, one database attempt, and 1,597 ms duration. All twelve expected routine slots are therefore accounted for; the latest slot has independent heartbeat evidence despite incomplete Cloudflare telemetry. A separate live public database probe at 14:31 UTC returned HTTP 200 on its first attempt. No manual heartbeat, alert, deployment, schedule change, subscriber access, or database write was performed. Private raw logs and the slot-comparison summary remain in ignored `.private/` files. No application code changed; application tests were not rerun for this audit.
 
 ### 2026-10-16 (external database monitoring)
 
@@ -472,7 +621,7 @@ The first migration deployment (run `38062183231`) stopped at statement zero wit
 A full review of subscriber, new-applicant, administrator, and owner journeys was run against demo mode only. No production read or write occurred; this was verified by inspecting outbound requests across every route plus a payment upload. Fixes applied:
 
 - **Payment references.** The subscriber dashboard and payments screen led with the program assessment whenever one was assigned, presenting the combined reconciliation net (assessment base plus HMO shortfall) as a single amount to transfer under the assessment reference. Because the transfer reference is the only thing distinguishing the two obligations in one shared account, a subscriber following the interface would have sent premium money tagged as an assessment payment, leaving the premium recorded as underpaid and the deposit unreconcilable. Both screens now lead with whichever obligation is outstanding, ask for only `assessmentOwnDueKobo` under the assessment reference, and disclose the premium variance with its own reference. The reconciliation formula in §7.2 is unchanged.
-- **Duplicate account storage.** Program settings collected bank details twice — once for HMO premiums and once per assessment — for what is a single program account, so the two copies could drift. The assessment now inherits the program account and configures only its transfer reference (§7.3).
+- **Duplicate account storage.** Program settings collected bank details twice — once for HMO premiums and once per assessment — for what is a single program account, so the two copies could drift. The assessment now inherits the program account and configures only its transfer reference (§7.4).
 - **Settled assessments** no longer render as `₦0.00 ... due`.
 - **Family coverage in the new-subscriber flow** accepted zero dependents, so an applicant could submit family pricing covering one person. `householdValidationMessage` now gates step 3 and submission, matching the renewal flow.
 - **Public join page** disclosed a 15% program administrative fee through a stale fallback when no period was loaded. It now uses the configured rates, defaulting to 1% NHIS and 2% program administration.

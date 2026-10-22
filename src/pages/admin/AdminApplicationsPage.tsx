@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { MessageCircle, Search, ShieldAlert, UserCheck, UserPlus, X } from 'lucide-react';
+import { CalendarClock, MessageCircle, Search, ShieldAlert, UserCheck, UserPlus, X } from 'lucide-react';
 import { Button, EmptyState, PageHeader, StatusBadge } from '../../components/ui';
+import { ProrationBreakdown } from '../../components/ProrationBreakdown';
+import { useApp } from '../../context/AppContext';
+import { formatNaira } from '../../lib/money';
+import { afterRenewalWindow, avonProration, coverageRange, coverageTermStart, lateCoverageStart } from '../../lib/proration';
 import { demoSnapshot } from '../../data/demo';
 import { whatsappVerificationUrl } from '../../lib/duplicateMatching';
 import { fullName } from '../../lib/format';
@@ -11,12 +15,27 @@ function personName(person: Person) {
   return fullName(person);
 }
 
+/** The AVON proration an approval now would record, or null inside the renewal window. */
+function approvalProration(application: AdminSubscriberApplication) {
+  if (!application.lateCoverageStartsOn || !application.premiumKobo) return null;
+  const termStart = application.coverageStartsOn ?? `${application.year}-09-01`;
+  return avonProration(application.premiumKobo, application.nhisFeeBasisPoints ?? 100, termStart, application.lateCoverageStartsOn, application.year + 1);
+}
+
 const demoApplication: AdminSubscriberApplication = {
   id: 'demo-application', periodId: demoSnapshot.period.id, year: demoSnapshot.period.year, status: 'pending_review', graduationYear: 1996, principal: { ...demoSnapshot.enrollments[0].principal, id: 'demo-applicant', firstName: 'Emeka', surname: 'Nwosu', email: 'emeka.nwosu@example.com', mobile: '08012345678' }, dependents: [], planId: demoSnapshot.plans[0].id, planName: demoSnapshot.plans[0].name, category: 'individual', hospital: '', consentedAt: new Date().toISOString(), duplicateStatus: 'clear', adminNote: null, enrollmentId: null, submittedAt: new Date().toISOString(), createdAt: new Date().toISOString(), accountEmail: 'emeka.nwosu@example.com', candidates: [],
 };
 
 export function AdminApplicationsPage() {
-  const [applications, setApplications] = useState<AdminSubscriberApplication[]>(isDemoMode ? [demoApplication] : []);
+  const { snapshot } = useApp();
+  const [applications, setApplications] = useState<AdminSubscriberApplication[]>(() => {
+    if (!isDemoMode || !snapshot) return isDemoMode ? [demoApplication] : [];
+    // Demo applications follow the preview period, so closing it previews a late approval.
+    const plan = snapshot.plans.find((item) => item.id === demoApplication.planId);
+    const late = afterRenewalWindow(snapshot.period);
+    return [{ ...demoApplication, premiumKobo: plan?.individualPremiumKobo ?? null, nhisFeeBasisPoints: snapshot.period.nhisFeeBasisPoints, coverageStartsOn: coverageTermStart(snapshot.period), lateCoverageStartsOn: late ? lateCoverageStart(snapshot.period, snapshot.program.timezone) : null }];
+  });
+  const newEnrolleeTerms = snapshot?.assessments.find((item) => item.active);
   const [filter, setFilter] = useState('pending_review');
   const [query, setQuery] = useState('');
   const [notes, setNotes] = useState<Record<string, string>>({});
@@ -45,7 +64,12 @@ export function AdminApplicationsPage() {
     const approvalPrompt = openCount
       ? `${personName(application.principal)} still has ${openCount} unresolved possible match${openCount === 1 ? '' : 'es'} with an existing subscriber. Approving now creates a separate subscriber record. Continue?`
       : `Approve ${personName(application.principal)} as a new subscriber?`;
-    if (action === 'approve' && !window.confirm(approvalPrompt)) return;
+    const proration = approvalProration(application);
+    const lateDetail = proration
+      ? `\n\nThis is a late enrollment: AVON coverage ${coverageRange(proration.coverageStartMonth, application.coverageStartsOn ?? proration.coverageStartMonth)} (${proration.billedMonths} months). The subscriber pays the full annual total and ${formatNaira(proration.creditKobo)} is recorded as credit toward ${proration.creditYear} enrollment.`
+      : '';
+    const feeDetail = newEnrolleeTerms ? `\n\nThe ${newEnrolleeTerms.name} is assigned automatically at ${formatNaira(newEnrolleeTerms.amountKobo)}${newEnrolleeTerms.futureCreditKobo > 0 ? ` (${formatNaira(newEnrolleeTerms.futureCreditKobo)} future credit)` : ' with no future credit'}.` : '';
+    if (action === 'approve' && !window.confirm(approvalPrompt + lateDetail + feeDetail)) return;
     if (action === 'mark_duplicate' && !window.confirm('Mark this as a duplicate and close the application?')) return;
     if (isDemoMode) {
       setApplications((current) => current.map((item) => item.id === application.id ? { ...item, status: action === 'approve' ? 'approved' : action === 'request_changes' ? 'request_changes' : 'rejected', adminNote: notes[item.id]?.trim() || null } : item));
@@ -95,6 +119,14 @@ export function AdminApplicationsPage() {
           <div><small>Hospital</small><strong>{application.hospital || 'Not entered'}</strong></div>
           <div><small>Duplicate review</small><strong>{application.duplicateStatus.replace('_', ' ')}</strong></div>
         </div>
+
+        {application.status === 'pending_review' && (() => {
+          const proration = approvalProration(application);
+          return proration ? <div className="info-banner late-enrollment-note" role="note"><CalendarClock size={18} /><span>
+            <strong>Late enrollment.</strong> Approving now records AVON coverage from the approval month. Adjust it later from Enrollees → Coverage if AVON's invoice shows a different start.
+            <ProrationBreakdown proration={proration} termStart={application.coverageStartsOn ?? proration.coverageStartMonth} nhisFeeBasisPoints={application.nhisFeeBasisPoints ?? 100} estimate compact />
+          </span></div> : null;
+        })()}
 
         {openCandidates.length > 0 && <section className="duplicate-review">
           <div className="duplicate-review__title"><ShieldAlert size={19} /><div><strong>Possible existing subscriber</strong><span>Compare the records or confirm through WhatsApp.</span></div></div>

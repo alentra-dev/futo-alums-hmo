@@ -37,6 +37,11 @@ export function formatNaira(kobo: number, showKobo = true) {
   }).format(kobo / KOBO_PER_NAIRA);
 }
 
+/** A balance with an explicit sign: credits as +₦, amounts owed as −₦. */
+export function formatSignedNaira(kobo: number) {
+  return `${kobo < 0 ? '−' : kobo > 0 ? '+' : ''}${formatNaira(Math.abs(kobo))}`;
+}
+
 export function nairaToKobo(value: number | string) {
   const normalized = typeof value === 'string' ? Number(value.replace(/[^\d.-]/g, '')) : value;
   return Math.round(normalized * KOBO_PER_NAIRA);

@@ -24,6 +24,7 @@ Use **Admin workspace** in the left navigation after signing in. Subscriber heal
 | **Subscriber access** | Change the email used to sign in without changing AVON enrollment email history |
 | **Audit history** | Trace who changed what and when |
 | **Program settings** | Manage time zone, HMO fees, program assessments, enrollment dates/status, annual rollover, and the program payment account |
+| **Enrollees → Coverage** | Record or correct a late member's AVON coverage start month to match AVON's invoice |
 | **Enrollees → Act for** | Work in a subscriber's portal to complete their tasks when they cannot access it themselves |
 | **Administrator access** | Owner-only control for adding or removing administrators |
 
@@ -40,6 +41,28 @@ Use **Admin workspace** in the left navigation after signing in. Subscriber heal
 
 Do not approve an application merely because the name looks familiar. Resolve every duplicate warning first.
 
+Approval assigns the program assessment automatically at its new-enrollee terms: for 2026–27, a ₦15,000 one-time CAC registration fee with no future credit. The approval prompt states the amount.
+
+## Late enrollment (after the renewal window)
+
+AVON keeps accepting new members for the rest of the coverage term, so the portal keeps accepting new-subscriber applications after the renewal window closes. Existing subscribers can no longer change their details.
+
+- The AVON term for each year runs **1 September to 31 August** (for 2026: Sep 2026 – Aug 2027).
+- A late member pays the **full** annual total, including the 2% program fee on the full premium.
+- AVON bills the program only from the member's coverage start month through August.
+- The difference between the full premium + NHIS and AVON's prorated premium + NHIS is recorded as a credit toward the member's next enrollment.
+- Example, Plus family from October 2026: AVON bills 11 months, ₦242,076.08 + ₦2,420.76 NHIS, and ₦22,226.99 is credited toward 2027.
+
+When reviewing a late application, the card shows **Late enrollment** and the expected AVON coverage, billed amount and credit. Approval records the approval month as the coverage start.
+
+When AVON's supplementary invoice arrives:
+
+1. Open **Enrollees**, filter **Late enrollees**, and select **Coverage** on the member's row.
+2. Set **AVON coverage start month** to the first month on AVON's invoice, and confirm that the billed premium and NHIS match the invoice.
+3. Enter the reason, such as the invoice number, and save. The change is recorded in the audit history.
+
+Untick **Joined after the renewal window** only if the member actually has full-term coverage. Switch late enrollment off in **Program settings → Enrollment period** if AVON stops accepting new members.
+
 ## Enrollees and exports
 
 1. Select the **Enrollment year** before reviewing or downloading anything.
@@ -50,6 +73,7 @@ Do not approve an application merely because the name looks familiar. Resolve ev
    - **Summary**: principal member, plan/category, HMO payable/verified/position, assessment paid/due, future credit, and status.
    - **Admin full export**: complete enrollment fields plus internal HMO and assessment accounting fields.
    - **AVON export**: AVON-ready fields only; excludes payment, assessment, and other internal administration fields and includes only submitted or closed enrollments.
+   - The **Summary** and **Admin full export** also show each late member's AVON coverage, billed months, prorated premium and NHIS, and proration credit. They also show every member's balance **brought forward** from last year and **carry-forward** to next year (HMO balance, CAC balance, net).
 
 Important:
 
@@ -57,6 +81,21 @@ Important:
 - Search and status filters change the on-screen list but do **not** limit exported rows.
 - Review the AVON workbook before sending it.
 - Do not email or post the Admin Full Export in group chats.
+
+### Carry to next year (automatic)
+
+The **Carry to {next year}** column shows what each submitted enrollment will bring into the household's next enrollment. It is applied automatically when that enrollment exists:
+
+- **HMO premium**: an overpayment is a credit; an unpaid balance is carried as owed.
+- **CAC**:
+  - A fully paid ₦33,000 contribution carries its ₦18,000 credit.
+  - An unpaid one carries only the one-time **₦15,000 registration fee**, not the higher amount.
+  - A partial payment carries the difference.
+  - An enrollee who was never assigned the CAC owes the ₦15,000 fee.
+- **Late-enrollment credit**: the months AVON did not bill.
+- An HMO overpayment that covers the CAC (one combined transfer) counts as settling it.
+
+Figures use verified payments only and update immediately when you verify a late payment. Subscribers see the same breakdown under **Your {next year} enrollment**. Next year, it appears on their payable as **Brought forward**. Do not add a separate charge or credit for these amounts. When configuring next year's CAC assessment, do not assign it to returning households; their fee is already carried forward.
 
 ### Enrollment statuses
 
@@ -155,11 +194,13 @@ The finalized 2026 HMO fee model is 1% AVON NHIS plus 2% program administration.
 
 Use this section for a distinct non-premium contribution such as CAC/entity-registration costs. Configure its name, description, base amount, retained fee portion, future-enrollment credit, credit year, due date, active state, and the transfer reference that identifies its payments. Assessment payments are collected into the same program account as HMO premiums; the reference is the only difference, so it must not match the HMO reference.
 
-Contribution, one-time fee, future credit, and credit year in **Program settings** are defaults for new assignments. Saving defaults does not change terms already assigned to subscribers. The name, disclosure, due date, reference, and active state remain shared.
+Contribution, one-time fee, future credit, and credit year in **Program settings** are the **new-enrollee terms**. They are assigned automatically when a new subscriber is approved, and the one-time fee is also what an earlier enrollee who never paid their assessment owes at their next enrollment. Saving them does not change terms already assigned to subscribers. The name, disclosure, due date, reference, and active state remain shared.
 
 Use **Enrollees → Adjust** to include a subscriber and set their individual contribution, one-time fee, future credit, and credit year. The fee and credit must add up to the contribution. For a fee-only exception, set the contribution and fee to the approved amount and the future credit to zero; reducing only the signed adjustment does not remove credit. Enter a reason and review the payable and planned credit before saving. Other subscribers retain their own terms.
 
-Approval of a new application does not automatically assign an assessment. After approval, review the enrollee's assessment inclusion and explicitly assign the appropriate terms.
+Approval of a new application assigns the assessment at the new-enrollee terms automatically. Use **Adjust** only for an approved exception.
+
+If a subscriber sends the premium and the assessment in one transfer, verify it as an HMO payment. The overpayment is reconciled against the assessment automatically, and the subscriber is not asked to pay the assessment again.
 
 Signed adjustments remain available for other corrections and do not change the planned credit. The displayed net amount combines the assigned assessment contribution, exact HMO under/overpayment, any administrator adjustment, and verified assessment payments. Do not use an adjustment to hide a payment; record every transfer as a payment confirmation. An assessment with payment records cannot be removed.
 
@@ -167,7 +208,8 @@ Signed adjustments remain available for other corrections and do not change the 
 
 - **Scheduled**: configured but not open.
 - **Open**: subscribers can update and submit.
-- **Closed**: subscribers can no longer change or submit enrollment details.
+- **Closed**: subscribers can no longer change or submit enrollment details. New subscribers can still join as late enrollees while **Keep accepting new subscribers after the renewal window closes** is ticked; the status line under the form says which mode applies.
+- **AVON coverage starts**: the first month of the twelve-month AVON term (September of the coverage year). Late-enrollment proration counts from here.
 
 Administrators may adjust opening and closing dates and add an extension or closure note. Confirm that outstanding subscriber work has been resolved before closing.
 
@@ -226,6 +268,7 @@ Give admin access only to people actively performing program administration. Rem
 
 The external Cloudflare monitor checks the database four times daily: 02:17, 08:17,
 14:17, and 20:17 Africa/Lagos. Closed enrollment is an expected healthy response.
+A closed period that is still accepting late enrollees is also healthy.
 Healthchecks.io routes configured failure and missed-success alerts to the project
 email. A missing successful check for 24 hours should trigger an alert independently
 of Cloudflare's own scheduler.

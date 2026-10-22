@@ -6,7 +6,8 @@ import { fullName } from '../lib/format';
 import { planTotalKobo, type SurchargeRates } from '../lib/money';
 import { isDemoMode, supabase } from '../lib/supabase';
 import { loadSurchargeRates, surchargeRates, withSurchargeRates } from '../lib/surchargeRates';
-import type { AssessmentAdjustment, ConsentRecord, Enrollment, EnrollmentPeriod, FinancialAssessment, Payment, PaymentAccount, PaymentInput, PaymentStatus, PlanCategory, ProgramSnapshot, Role } from '../lib/types';
+import { avonProration, coverageTermStart } from '../lib/proration';
+import type { AssessmentAdjustment, CarryForward, ConsentRecord, Enrollment, EnrollmentPeriod, EnrollmentProration, FinancialAssessment, Payment, PaymentAccount, PaymentInput, PaymentStatus, PlanCategory, ProgramSnapshot, Role } from '../lib/types';
 
 interface AppContextValue {
   snapshot: ProgramSnapshot | null;
@@ -35,6 +36,7 @@ interface AppContextValue {
   updateProgramTimezone: (timezone: string) => Promise<void>;
   updateSurchargeRates: (rates: SurchargeRates) => Promise<void>;
   updateAssessmentAssignment: (assignment: AssessmentAdjustment, included: boolean) => Promise<void>;
+  updateEnrollmentCoverage: (enrollmentId: string, coverageStartMonth: string | null, note: string) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -60,6 +62,45 @@ export async function loadFinancialWorkspace(snapshot: ProgramSnapshot) {
     assessments: financial.assessments ?? [],
     assessmentAdjustments: financial.assessmentAdjustments ?? [],
     payments: snapshot.payments.map((payment) => ({ ...payment, assessmentId: links.get(payment.id) ?? null })),
+  };
+}
+
+interface EnrollmentCoveragePayload {
+  coverageStartsOn: string;
+  lateEnrollmentOpen: boolean;
+  intakeMode: 'regular' | 'late' | null;
+  lateCoverageStartsOn: string | null;
+  enrollments: (EnrollmentProration & { enrollmentId: string })[];
+}
+
+/** Merges the period's AVON coverage term and each late member's stored proration. */
+export async function loadEnrollmentCoverage<T extends Pick<ProgramSnapshot, 'period' | 'enrollments'>>(snapshot: T): Promise<T> {
+  if (!supabase) return snapshot;
+  const { data, error } = await supabase.rpc('get_enrollment_coverage', { p_period_id: snapshot.period.id });
+  // Before migration 202610220023 is applied the function does not exist; full-term
+  // coverage is then the correct reading for every enrollment.
+  if (error) return snapshot;
+  const coverage = data as EnrollmentCoveragePayload;
+  const prorations = new Map(coverage.enrollments.map(({ enrollmentId, ...proration }) => [enrollmentId, proration]));
+  return {
+    ...snapshot,
+    period: { ...snapshot.period, coverageStartsOn: coverage.coverageStartsOn, lateEnrollmentOpen: coverage.lateEnrollmentOpen, intakeMode: coverage.intakeMode, lateCoverageStartsOn: coverage.lateCoverageStartsOn },
+    enrollments: snapshot.enrollments.map((enrollment) => ({ ...enrollment, proration: prorations.get(enrollment.id) ?? null })),
+  };
+}
+
+/** Merges the balance each enrollment receives from the household's previous year. */
+export async function loadCarryForwards<T extends Pick<ProgramSnapshot, 'period' | 'enrollments'>>(snapshot: T): Promise<T> {
+  if (!supabase) return snapshot;
+  const { data, error } = await supabase.rpc('get_enrollment_carry_forwards', { p_period_id: snapshot.period.id });
+  // Before migration 202610220024 is applied nothing is carried forward.
+  if (error) return snapshot;
+  const payload = data as { carryForwardEnabled: boolean; enrollments: { enrollmentId: string; carryIn: CarryForward }[] };
+  const carryIns = new Map(payload.enrollments.map((item) => [item.enrollmentId, item.carryIn]));
+  return {
+    ...snapshot,
+    period: { ...snapshot.period, carryForwardEnabled: payload.carryForwardEnabled },
+    enrollments: snapshot.enrollments.map((enrollment) => ({ ...enrollment, carryIn: carryIns.get(enrollment.id) ?? null })),
   };
 }
 
@@ -98,7 +139,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (error.message !== 'No active program membership') setNotice(error.message);
       setSnapshot(null);
     } else {
-      const mapped = await loadFinancialWorkspace(mapSnapshot(snapshotResult.data));
+      const mapped = await loadCarryForwards(await loadEnrollmentCoverage(await loadFinancialWorkspace(mapSnapshot(snapshotResult.data))));
       try {
         const [rates, consentRecords] = await Promise.all([
           loadSurchargeRates(mapped.period.id),
@@ -416,6 +457,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } : current);
   };
 
+  const updateEnrollmentCoverage = async (enrollmentId: string, coverageStartMonth: string | null, note: string) => {
+    if (!isDemoMode && supabase) {
+      const { error } = await supabase.rpc('set_enrollment_coverage_start', {
+        p_enrollment_id: enrollmentId, p_coverage_start: coverageStartMonth, p_note: note,
+      });
+      if (error) throw error;
+      await loadLiveSnapshot();
+      setNotice('AVON coverage start updated.');
+      return;
+    }
+    mutateDemo((current) => ({
+      ...current,
+      enrollments: current.enrollments.map((enrollment) => {
+        if (enrollment.id !== enrollmentId) return enrollment;
+        const plan = current.plans.find((item) => item.id === enrollment.planId);
+        const premium = plan ? (enrollment.category === 'family' ? plan.familyPremiumKobo : plan.individualPremiumKobo) : 0;
+        const proration = coverageStartMonth
+          ? avonProration(premium, surchargeRates(current.period).nhisFeeBasisPoints, coverageTermStart(current.period), coverageStartMonth, current.period.year + 1)
+          : null;
+        return { ...enrollment, proration: proration && { ...proration, note } };
+      }),
+    }));
+    setNotice('AVON coverage start updated.');
+  };
+
   const value: AppContextValue = {
     snapshot,
     activeEnrollmentId,
@@ -443,6 +509,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     updateProgramTimezone,
     updateSurchargeRates,
     updateAssessmentAssignment,
+    updateEnrollmentCoverage,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

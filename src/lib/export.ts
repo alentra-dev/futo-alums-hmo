@@ -1,5 +1,5 @@
 import type { ProgramSnapshot } from './types';
-import { assessmentForEnrollment, enrollmentFinancialPosition } from './financialPosition';
+import { assessmentForEnrollment, enrollmentFinancialPosition, nextEnrollmentCarryForward, registrationFeeKobo } from './financialPosition';
 import { calculateFees } from './money';
 import { surchargeRates } from './surchargeRates';
 import { fullName } from './format';
@@ -19,9 +19,13 @@ export const adminFullExportColumns = [
   'COUNTRY_OF_RESIDENCE', 'STATE_OF_RESIDENCE', 'TOWN_OF_RESIDENCE', 'LGA_OF_RESIDENCE', 'MOBILE_NO', 'EMAIL',
   'CATEGORY(FAMILY/INDIVIDUAL)', 'HOSPITAL NAME', 'PLAN TYPE', 'CLIENT NAME', 'FUTO HMO FULL PAYMNT', 'AVON PREMIUM', 'AVON (+ NHIS FEE)', 'AVON BALANCE',
   'HMO PAYMENT POSITION', 'HMO UNDERPAYMENT', 'HMO OVERPAYMENT', 'PROGRAM ASSESSMENT', 'ASSESSMENT PAID', 'ASSESSMENT NET DUE', 'FUTURE ENROLLMENT CREDIT', 'ASSESSMENT CONTRIBUTION', 'ASSESSMENT ONE-TIME FEE', 'CREDIT ENROLLMENT YEAR',
+  'LATE ENROLLMENT', 'AVON COVERAGE START', 'AVON BILLED MONTHS', 'AVON PRORATED PREMIUM', 'AVON PRORATED NHIS', 'PRORATION CREDIT',
+  'BROUGHT FORWARD FROM PRIOR YEAR', 'CARRY-FORWARD HMO BALANCE', 'CARRY-FORWARD CAC BALANCE', 'CARRY-FORWARD NET',
 ];
 
-const internalColumns = new Set(['FUTO HMO FULL PAYMNT', 'HMO PAYMENT POSITION', 'HMO UNDERPAYMENT', 'HMO OVERPAYMENT', 'PROGRAM ASSESSMENT', 'ASSESSMENT PAID', 'ASSESSMENT NET DUE', 'FUTURE ENROLLMENT CREDIT', 'ASSESSMENT CONTRIBUTION', 'ASSESSMENT ONE-TIME FEE', 'CREDIT ENROLLMENT YEAR']);
+const internalColumns = new Set(['FUTO HMO FULL PAYMNT', 'HMO PAYMENT POSITION', 'HMO UNDERPAYMENT', 'HMO OVERPAYMENT', 'PROGRAM ASSESSMENT', 'ASSESSMENT PAID', 'ASSESSMENT NET DUE', 'FUTURE ENROLLMENT CREDIT', 'ASSESSMENT CONTRIBUTION', 'ASSESSMENT ONE-TIME FEE', 'CREDIT ENROLLMENT YEAR',
+  'LATE ENROLLMENT', 'AVON COVERAGE START', 'AVON BILLED MONTHS', 'AVON PRORATED PREMIUM', 'AVON PRORATED NHIS', 'PRORATION CREDIT',
+  'BROUGHT FORWARD FROM PRIOR YEAR', 'CARRY-FORWARD HMO BALANCE', 'CARRY-FORWARD CAC BALANCE', 'CARRY-FORWARD NET']);
 export const avonExportColumns = adminFullExportColumns.filter((column) => !internalColumns.has(column));
 
 export type EnrollmentExportKind = 'avon' | 'admin';
@@ -42,6 +46,7 @@ export async function createEnrollmentWorkbook(snapshot: ProgramSnapshot, kind: 
   const sheet = workbook.addWorksheet(adminFull ? 'ADMIN FULL EXPORT' : 'AVON COMPLETED TEMPLATE', { views: [{ state: 'frozen', ySplit: 1 }] });
   sheet.addRow(columns);
   let serial = 1;
+  const registrationFee = registrationFeeKobo(snapshot.assessments);
   for (const enrollment of snapshot.enrollments) {
     if (!adminFull && !['submitted', 'closed'].includes(enrollment.status)) continue;
     const plan = snapshot.plans.find((item) => item.id === enrollment.planId);
@@ -51,6 +56,8 @@ export async function createEnrollmentWorkbook(snapshot: ProgramSnapshot, kind: 
     const verified = snapshot.payments.filter((item) => item.enrollmentId === enrollment.id && item.status === 'verified' && !item.assessmentId).reduce((sum, item) => sum + item.amountKobo, 0);
     const assigned = assessmentForEnrollment(enrollment.id, snapshot.assessments, snapshot.assessmentAdjustments);
     const financial = enrollmentFinancialPosition(enrollment, snapshot.payments, assigned.assessment, assigned.adjustment);
+    const carry = nextEnrollmentCarryForward(enrollment, snapshot.payments, registrationFee, assigned.assessment, assigned.adjustment, snapshot.period.carryForwardEnabled !== false);
+    const proration = enrollment.proration;
     for (const [index, person] of [enrollment.principal, ...enrollment.dependents].entries()) {
       const contact = adminFull ? { mobile: person.mobile, email: person.email } : providerContact(person, enrollment.principal);
       const row = [
@@ -63,6 +70,9 @@ export async function createEnrollmentWorkbook(snapshot: ProgramSnapshot, kind: 
         index === 0 ? financial.premium.status : '', index === 0 ? financial.premium.underpaymentKobo / 100 : '', index === 0 ? financial.premium.overpaymentKobo / 100 : '',
         index === 0 && assigned.assessment ? assigned.assessment.name : '', index === 0 ? financial.assessmentPaidKobo / 100 : '', index === 0 ? financial.assessmentDueKobo / 100 : '', index === 0 && assigned.assessment ? assigned.assessment.futureCreditKobo / 100 : '',
         index === 0 && assigned.assessment ? assigned.assessment.amountKobo / 100 : '', index === 0 && assigned.assessment ? assigned.assessment.feePortionKobo / 100 : '', index === 0 && assigned.assessment ? assigned.assessment.creditYear : '',
+        index === 0 ? (proration ? 'YES' : 'NO') : '', index === 0 && proration ? dateForAvon(proration.coverageStartMonth) : '', index === 0 && proration ? proration.billedMonths : '',
+        index === 0 && proration ? proration.proratedPremiumKobo / 100 : '', index === 0 && proration ? proration.proratedNhisKobo / 100 : '', index === 0 && proration ? proration.creditKobo / 100 : '',
+        index === 0 ? (enrollment.carryIn?.netKobo ?? 0) / 100 : '', index === 0 && carry ? carry.premiumBalanceKobo / 100 : '', index === 0 && carry ? carry.assessmentBalanceKobo / 100 : '', index === 0 && carry ? carry.netKobo / 100 : '',
       ];
       sheet.addRow(adminFull ? row : row.filter((_value, columnIndex) => !internalColumns.has(adminFullExportColumns[columnIndex])));
     }
@@ -73,7 +83,7 @@ export async function createEnrollmentWorkbook(snapshot: ProgramSnapshot, kind: 
   header.height = 34;
   sheet.columns.forEach((column, index) => { column.width = index >= 13 && index <= 22 ? 24 : 18; });
   sheet.autoFilter = { from: 'A1', to: `${sheet.getColumn(columns.length).letter}1` };
-  const currencyColumns = adminFull ? [25, 26, 27, 28, 30, 31, 33, 34, 35, 36, 37] : [25, 26, 27];
+  const currencyColumns = adminFull ? [25, 26, 27, 28, 30, 31, 33, 34, 35, 36, 37, 42, 43, 44, 45, 46, 47, 48] : [25, 26, 27];
   currencyColumns.forEach((column) => { sheet.getColumn(column).numFmt = '₦#,##0.00'; });
   return workbook.xlsx.writeBuffer();
 }
@@ -115,19 +125,29 @@ export async function createSummaryWorkbook(snapshot: ProgramSnapshot) {
     { header: 'Assessment contribution', key: 'assessmentContribution', width: 22 },
     { header: 'One-time fee', key: 'assessmentFee', width: 18 },
     { header: 'Credit year', key: 'creditYear', width: 16 },
+    { header: 'AVON coverage', key: 'coverage', width: 22 },
+    { header: 'AVON billed (premium + NHIS)', key: 'avonBilled', width: 24 },
+    { header: 'Proration credit', key: 'prorationCredit', width: 18 },
+    { header: 'Brought forward', key: 'broughtForward', width: 18 },
+    { header: 'Carry-forward HMO balance', key: 'carryHmo', width: 22 },
+    { header: 'Carry-forward CAC balance', key: 'carryCac', width: 22 },
+    { header: 'Carry-forward net', key: 'carryNet', width: 20 },
   ];
+  const registrationFee = registrationFeeKobo(snapshot.assessments);
   for (const enrollment of snapshot.enrollments) {
     const plan = snapshot.plans.find((item) => item.id === enrollment.planId);
     const related = snapshot.payments.filter((item) => item.enrollmentId === enrollment.id);
     const pending = related.filter((item) => item.status === 'pending' && !item.assessmentId).reduce((sum, item) => sum + item.amountKobo, 0);
     const assigned = assessmentForEnrollment(enrollment.id, snapshot.assessments, snapshot.assessmentAdjustments);
     const financial = enrollmentFinancialPosition(enrollment, snapshot.payments, assigned.assessment, assigned.adjustment);
-    sheet.addRow({ name: fullName(enrollment.principal), plan: plan?.name ?? 'Not selected', category: enrollment.category, owed: enrollment.totalKobo / 100, paid: financial.premiumPaidKobo / 100, pending: pending / 100, outstanding: financial.premium.underpaymentKobo / 100, status: enrollment.status, paymentPosition: financial.premium.status, underpayment: financial.premium.underpaymentKobo / 100, overpayment: financial.premium.overpaymentKobo / 100, assessment: assigned.assessment?.name ?? '', assessmentPaid: financial.assessmentPaidKobo / 100, assessmentDue: financial.assessmentDueKobo / 100, futureCredit: assigned.assessment ? assigned.assessment.futureCreditKobo / 100 : '', assessmentContribution: assigned.assessment ? assigned.assessment.amountKobo / 100 : '', assessmentFee: assigned.assessment ? assigned.assessment.feePortionKobo / 100 : '', creditYear: assigned.assessment?.creditYear ?? '' });
+    const carry = nextEnrollmentCarryForward(enrollment, snapshot.payments, registrationFee, assigned.assessment, assigned.adjustment, snapshot.period.carryForwardEnabled !== false);
+    const proration = enrollment.proration;
+    sheet.addRow({ coverage: proration ? `Late: ${proration.billedMonths} months from ${dateForAvon(proration.coverageStartMonth)}` : 'Full term', avonBilled: proration ? (proration.proratedPremiumKobo + proration.proratedNhisKobo) / 100 : '', prorationCredit: proration ? proration.creditKobo / 100 : '', broughtForward: (enrollment.carryIn?.netKobo ?? 0) / 100, carryHmo: carry ? carry.premiumBalanceKobo / 100 : '', carryCac: carry ? carry.assessmentBalanceKobo / 100 : '', carryNet: carry ? carry.netKobo / 100 : '', name: fullName(enrollment.principal), plan: plan?.name ?? 'Not selected', category: enrollment.category, owed: enrollment.totalKobo / 100, paid: financial.premiumPaidKobo / 100, pending: pending / 100, outstanding: financial.premium.underpaymentKobo / 100, status: enrollment.status, paymentPosition: financial.premium.status, underpayment: financial.premium.underpaymentKobo / 100, overpayment: financial.premium.overpaymentKobo / 100, assessment: assigned.assessment?.name ?? '', assessmentPaid: financial.assessmentPaidKobo / 100, assessmentDue: financial.assessmentDueKobo / 100, futureCredit: assigned.assessment ? assigned.assessment.futureCreditKobo / 100 : '', assessmentContribution: assigned.assessment ? assigned.assessment.amountKobo / 100 : '', assessmentFee: assigned.assessment ? assigned.assessment.feePortionKobo / 100 : '', creditYear: assigned.assessment?.creditYear ?? '' });
   }
   sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
   sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF12372A' } };
-  ['D', 'E', 'F', 'G', 'J', 'K', 'M', 'N', 'O', 'P', 'Q'].forEach((column) => { sheet.getColumn(column).numFmt = '₦#,##0.00'; });
-  sheet.autoFilter = { from: 'A1', to: 'R1' };
+  ['D', 'E', 'F', 'G', 'J', 'K', 'M', 'N', 'O', 'P', 'Q', 'T', 'U', 'V', 'W', 'X', 'Y'].forEach((column) => { sheet.getColumn(column).numFmt = '₦#,##0.00'; });
+  sheet.autoFilter = { from: 'A1', to: 'Y1' };
   return workbook.xlsx.writeBuffer();
 }
 

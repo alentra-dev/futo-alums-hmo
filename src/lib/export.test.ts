@@ -30,6 +30,29 @@ describe('enrollment export columns', () => {
     }
   });
 
+  it('reports a late enrollee proration and next-year carry-forward only in internal exports', async () => {
+    const ExcelJS = await import('exceljs');
+    const late = demoSnapshot.enrollments[1];
+    const snapshot = { ...demoSnapshot, enrollments: [late], payments: [{ ...demoSnapshot.payments[0], enrollmentId: late.id, amountKobo: late.totalKobo, status: 'verified' as const }] };
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(await createEnrollmentWorkbook(snapshot, 'admin'));
+    const value = (header: string) => workbook.worksheets[0].getRow(2).getCell(adminFullExportColumns.indexOf(header) + 1).value;
+    expect(value('LATE ENROLLMENT')).toBe('YES');
+    expect(value('AVON BILLED MONTHS')).toBe(11);
+    expect(value('PRORATION CREDIT')).toBe(late.proration!.creditKobo / 100);
+    // Unassigned to the assessment, so the one-time registration fee is charged next year.
+    expect(value('CARRY-FORWARD CAC BALANCE')).toBe(-15_000);
+    expect(value('CARRY-FORWARD NET')).toBe((late.proration!.creditKobo - 1_500_000) / 100);
+    for (const column of ['LATE ENROLLMENT', 'AVON COVERAGE START', 'AVON PRORATED PREMIUM', 'PRORATION CREDIT', 'BROUGHT FORWARD FROM PRIOR YEAR', 'CARRY-FORWARD NET']) {
+      expect(avonExportColumns).not.toContain(column);
+    }
+    await workbook.xlsx.load(await createSummaryWorkbook(snapshot));
+    const summary = workbook.worksheets[0];
+    const headers = (summary.getRow(1).values as string[]).slice(1);
+    expect(summary.getRow(2).getCell(headers.indexOf('AVON coverage') + 1).value).toMatch(/^Late: 11 months from 01\//);
+    expect(summary.getRow(2).getCell(headers.indexOf('Proration credit') + 1).value).toBe(late.proration!.creditKobo / 100);
+  });
+
   it('moves AVON financial columns into the correct provider template positions', () => {
     expect(avonExportColumns.slice(-3)).toEqual([
       'AVON PREMIUM',

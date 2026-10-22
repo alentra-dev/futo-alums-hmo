@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { ArrowLeft, ArrowRight, Check, HeartPulse, LogOut, Plus, ShieldCheck, Trash2, UserPlus, Users } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CalendarClock, Check, HeartPulse, Landmark, LogOut, Plus, ShieldCheck, Trash2, UserPlus, Users } from 'lucide-react';
 import clsx from 'clsx';
 import { Link } from 'react-router-dom';
 import { FeeBreakdown } from '../components/FeeBreakdown';
+import { ProrationBreakdown } from '../components/ProrationBreakdown';
 import { PersonFields } from '../components/PersonFields';
 import { Button } from '../components/ui';
 import { useApp } from '../context/AppContext';
@@ -14,6 +15,8 @@ import type { JoinConfig, JoinWorkspace, Person, PlanCategory, SubscriberApplica
 import { LoadingPage } from './LoadingPage';
 import { loadSurchargeRates, surchargeRates, withSurchargeRates } from '../lib/surchargeRates';
 import { parseNumericInput } from '../lib/numericInput';
+import { avonProration, coverageTermEnd, coverageTermStart, formatCoverageMonth, intakeMode, lateCoverageStart } from '../lib/proration';
+import { formatDate } from '../lib/format';
 
 function planPremium(plan: JoinConfig['plans'][number], category: PlanCategory) {
   return category === 'family' ? plan.familyPremiumKobo : plan.individualPremiumKobo;
@@ -21,6 +24,33 @@ function planPremium(plan: JoinConfig['plans'][number], category: PlanCategory) 
 
 function planAmount(plan: JoinConfig['plans'][number], category: PlanCategory, period: JoinConfig['period']) {
   return planTotalKobo(planPremium(plan, category), surchargeRates(period));
+}
+
+/** The expected AVON proration for a late applicant; the start month is recorded at approval. */
+function expectedProration(plan: JoinConfig['plans'][number] | null, category: PlanCategory, config: JoinConfig) {
+  if (!plan || config.enrollmentMode !== 'late' || !config.period) return null;
+  const start = config.period.lateCoverageStartsOn ?? lateCoverageStart(config.period, config.timezone);
+  return avonProration(planPremium(plan, category), surchargeRates(config.period).nhisFeeBasisPoints, coverageTermStart(config.period), start, config.period.year + 1);
+}
+
+function LateEnrollmentNotice({ config }: { config: JoinConfig }) {
+  if (config.enrollmentMode !== 'late' || !config.period) return null;
+  const termStart = coverageTermStart(config.period);
+  const start = config.period.lateCoverageStartsOn ?? lateCoverageStart(config.period, config.timezone);
+  return <div className="info-banner late-enrollment-note" role="note"><CalendarClock size={18} /><span>
+    <strong>Joining after the {config.period.year} renewal window.</strong> Renewals closed {formatDate(config.period.endsAt, config.timezone)}, but new subscribers can still join for AVON coverage through {formatCoverageMonth(coverageTermEnd(termStart))}.
+    {' '}You pay the full annual subscriber total. AVON bills the program only from your coverage start month (expected {formatCoverageMonth(start)}, confirmed when your application is approved), and the premium and NHIS difference is credited toward your {config.period.year + 1} enrollment.
+  </span></div>;
+}
+
+function RegistrationFeeNotice({ config }: { config: JoinConfig }) {
+  const fee = config.newEnrolleeAssessment;
+  if (!fee || fee.amountKobo <= 0) return null;
+  return <div className="info-banner" role="note"><Landmark size={18} /><span>
+    New subscribers also pay a one-time {fee.name} of <strong>{formatNaira(fee.amountKobo)}</strong>
+    {fee.futureCreditKobo > 0 ? `, including a ${formatNaira(fee.futureCreditKobo)} credit toward ${fee.creditYear} enrollment` : ' with no future enrollment credit'}.
+    {' '}It is paid separately, with its own transfer reference, after approval.
+  </span></div>;
 }
 
 function demoApplication(email: string, config: JoinConfig): SubscriberApplication {
@@ -34,12 +64,20 @@ function demoApplication(email: string, config: JoinConfig): SubscriberApplicati
 
 export function JoinPage() {
   const { authenticated, snapshot, register, signOut, notice, authError } = useApp();
-  const [config, setConfig] = useState<JoinConfig | null>(isDemoMode ? {
-    timezone: 'Africa/Lagos',
-    acceptingApplications: true,
-    period: snapshot?.period ?? null,
-    plans: snapshot?.plans ?? [],
-  } : null);
+  const [config, setConfig] = useState<JoinConfig | null>(() => {
+    if (!isDemoMode) return null;
+    const timezone = snapshot?.program.timezone ?? 'Africa/Lagos';
+    const mode = snapshot ? intakeMode(snapshot.period, timezone) : null;
+    const defaults = snapshot?.assessments.find((item) => item.active);
+    return {
+      timezone,
+      acceptingApplications: Boolean(mode),
+      enrollmentMode: mode,
+      period: snapshot && mode ? { ...snapshot.period, lateCoverageStartsOn: mode === 'late' ? lateCoverageStart(snapshot.period, timezone) : null } : null,
+      plans: mode ? snapshot?.plans.filter((plan) => plan.active) ?? [] : [],
+      newEnrolleeAssessment: defaults ? { name: defaults.name, amountKobo: defaults.amountKobo, feePortionKobo: defaults.feePortionKobo, futureCreditKobo: defaults.futureCreditKobo, creditYear: defaults.creditYear } : null,
+    };
+  });
   const [workspace, setWorkspace] = useState<JoinWorkspace | null>(null);
   const [email, setEmail] = useState('');
   const [activeId, setActiveId] = useState('');
@@ -94,6 +132,7 @@ export function JoinPage() {
   }, [activeId, workspace]);
 
   const activePlan = useMemo(() => config?.plans.find((plan) => plan.id === draft?.planId) ?? null, [config, draft?.planId]);
+  const proration = config && draft ? expectedProration(activePlan, draft.category, config) : null;
 
   const requestLink = async (event: FormEvent) => {
     event.preventDefault();
@@ -224,6 +263,7 @@ export function JoinPage() {
         <p className="eyebrow">New subscriber enrollment</p>
         <h1>Join the {config.period?.year ?? 'next'} FUTO alumni health program</h1>
         <p>Verify your email, choose a plan, and provide your enrollment details privately.</p>
+        <LateEnrollmentNotice config={config} />
       </div>
       <form onSubmit={requestLink}>
         <label>Email address<input required type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" /></label>
@@ -233,7 +273,7 @@ export function JoinPage() {
       </form>
     </section>
     <section className="join-plans">
-      <div className="join-section-title"><p className="eyebrow">{config.period?.year ?? 'Upcoming'} plans</p><h2>Compare subscriber totals</h2><p>Every displayed amount includes {formatBasisPoints(surchargeRates(config.period).nhisFeeBasisPoints)}% AVON NHIS, {formatBasisPoints(surchargeRates(config.period).programFeeBasisPoints)}% program administrative fee.</p></div>
+      <div className="join-section-title"><p className="eyebrow">{config.period?.year ?? 'Upcoming'} plans</p><h2>Compare subscriber totals</h2><p>Every displayed amount includes {formatBasisPoints(surchargeRates(config.period).nhisFeeBasisPoints)}% AVON NHIS, {formatBasisPoints(surchargeRates(config.period).programFeeBasisPoints)}% program administrative fee.</p><RegistrationFeeNotice config={config} /></div>
       {config.acceptingApplications ? <div className="plan-grid">{config.plans.map((plan) => <article className="plan-card" key={plan.id}><span className="plan-code">{plan.code.replaceAll('_', ' ')}</span><h2>{plan.name}</h2><p>{plan.description}</p><div className="join-plan-prices"><span><small>Individual</small><strong>{formatNaira(planAmount(plan, 'individual', config.period))}</strong></span><span><small>Family</small><strong>{formatNaira(planAmount(plan, 'family', config.period))}</strong></span></div><ul>{plan.highlights.map((highlight) => <li key={highlight}><Check size={15} />{highlight}</li>)}</ul></article>)}</div> : <div className="info-banner"><ShieldCheck size={19} /><span>New applications are currently closed. The next enrollment period will appear here when administrators open it.</span></div>}
     </section>
     <footer className="join-footer"><Link to="/privacy">Privacy notice</Link><span>Privacy contact: Jude Oruoghor</span></footer>
@@ -270,6 +310,7 @@ export function JoinPage() {
 
         {draft && !resolvedDraft && <>
           <div className="join-progress" aria-label="Application progress">{['Principal', 'Plan', 'Family', 'Review'].map((label, index) => <span key={label} className={clsx(index + 1 === step && 'active', index + 1 < step && 'complete')}><b>{index + 1 < step ? <Check size={14} /> : index + 1}</b>{label}</span>)}</div>
+          <LateEnrollmentNotice config={config} />
           {draft.status === 'request_changes' && <div className="info-banner"><ShieldCheck size={18} /><span><strong>Changes requested:</strong> {draft.adminNote || 'Review the application and submit it again.'}</span></div>}
           {error && <p className="form-error join-error" role="alert">{error}</p>}
 
@@ -286,6 +327,7 @@ export function JoinPage() {
             {draft.category === 'family' && <div className="info-banner"><Users size={18} /><span>Family pricing covers a principal, spouse, and up to four biological or legally adopted children under 21.</span></div>}
             <div className="join-plan-options">{config.plans.map((plan) => <label key={plan.id} className={clsx(draft.planId === plan.id && 'selected')}><input required type="radio" name="plan" checked={draft.planId === plan.id} onChange={() => setDraft({ ...draft, planId: plan.id })} /><span><strong>{plan.name}</strong><small>{plan.region}</small></span><b>{formatNaira(planAmount(plan, draft.category, config.period))}</b></label>)}</div>
             {activePlan && <FeeBreakdown premiumKobo={planPremium(activePlan, draft.category)} rates={surchargeRates(config.period)} />}
+            {proration && <ProrationBreakdown proration={proration} termStart={coverageTermStart(config.period!)} nhisFeeBasisPoints={surchargeRates(config.period).nhisFeeBasisPoints} estimate />}
             <label>Preferred hospital (optional)<input value={draft.hospital} onChange={(event) => setDraft({ ...draft, hospital: event.target.value })} placeholder="Start typing a hospital name" /></label>
             <div className="join-step__actions"><Button type="button" variant="secondary" onClick={() => setStep(1)}>Back</Button><Button disabled={busy === 'save'} icon={<ArrowRight size={17} />}>{busy === 'save' ? 'Saving...' : 'Save and continue'}</Button></div>
           </form>}
@@ -300,6 +342,8 @@ export function JoinPage() {
             <div className="section-heading"><span><ShieldCheck size={20} /></span><div><h2>Review and submit</h2><p>Payment becomes available after a quick administrator review.</p></div></div>
             <div className="application-review"><dl><div><dt>Principal</dt><dd>{draft.principal.firstName} {draft.principal.middleName} {draft.principal.surname}</dd></div><div><dt>Graduation year</dt><dd>{draft.graduationYear}</dd></div><div><dt>Plan</dt><dd>{activePlan?.name ?? 'Not selected'}</dd></div><div><dt>Plan type</dt><dd>{draft.category}</dd></div><div><dt>People covered</dt><dd>{draft.dependents.length + 1}</dd></div><div><dt>Subscriber total</dt><dd>{activePlan ? formatNaira(planAmount(activePlan, draft.category, config.period)) : 'Not selected'}</dd></div><div><dt>Hospital</dt><dd>{draft.hospital || 'Not provided'}</dd></div></dl></div>
             {activePlan && <FeeBreakdown premiumKobo={planPremium(activePlan, draft.category)} rates={surchargeRates(config.period)} />}
+            {proration && <ProrationBreakdown proration={proration} termStart={coverageTermStart(config.period!)} nhisFeeBasisPoints={surchargeRates(config.period).nhisFeeBasisPoints} estimate />}
+            <RegistrationFeeNotice config={config} />
             <label className="consent-box"><input required type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} /><span>I authorize the FUTO Alums HMO Program to process and share this enrollment information with AVON and necessary service providers. I confirm that I am authorized to provide information for each family member and have informed adult family members. Records may be retained for seven years. <Link to="/privacy">Read the privacy notice</Link>.</span></label>
             <div className="join-step__actions"><Button type="button" variant="secondary" onClick={() => setStep(3)}>Back</Button><Button disabled={busy === 'submit'} icon={<ShieldCheck size={17} />}>{busy === 'submit' ? 'Submitting...' : 'Submit for approval'}</Button></div>
           </form>}

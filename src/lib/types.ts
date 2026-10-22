@@ -60,6 +60,37 @@ export interface Enrollment {
   totalKobo: number;
   consentedAt: string | null;
   completeness: number;
+  /** Set only for members who joined after the renewal window; AVON bills fewer months. */
+  proration?: EnrollmentProration | null;
+  /** Balance brought forward from the household's previous-year enrollment. */
+  carryIn?: CarryForward | null;
+}
+
+/** A balance carried from one coverage year into the next; positive amounts are credits. */
+export interface CarryForward {
+  sourceYear: number;
+  creditYear: number;
+  /** Verified HMO payments plus any earlier carry-in, less the subscriber total. */
+  premiumBalanceKobo: number;
+  /** Verified assessment payments less the one-time fee and adjustment; negative means owed. */
+  assessmentBalanceKobo: number;
+  prorationCreditKobo: number;
+  /** HMO overpayment used to cover an assessment balance owed. */
+  overpaymentAppliedKobo: number;
+  netKobo: number;
+}
+
+export interface EnrollmentProration {
+  /** First day of the first month AVON covers and bills, `yyyy-mm-01`. */
+  coverageStartMonth: string;
+  billedMonths: number;
+  proratedPremiumKobo: number;
+  proratedNhisKobo: number;
+  /** Full premium + NHIS collected minus AVON's prorated premium + NHIS. */
+  creditKobo: number;
+  creditYear: number;
+  /** Administrator-only reason for the recorded start month. */
+  note?: string | null;
 }
 
 export interface Payment {
@@ -118,6 +149,24 @@ export interface EnrollmentPeriod {
   extensionNote?: string;
   nhisFeeBasisPoints: number;
   programFeeBasisPoints: number;
+  /** First month of the twelve-month AVON term, `yyyy-09-01` by default. */
+  coverageStartsOn?: string;
+  /** Whether new subscribers may keep joining after the renewal window closes. */
+  lateEnrollmentOpen?: boolean;
+  /** How this period currently accepts new subscribers, if at all. */
+  intakeMode?: 'regular' | 'late' | null;
+  /** The coverage month an approval now would record for a late member. */
+  lateCoverageStartsOn?: string | null;
+  /** Whether balances from this year carry into the next (false for imported years). */
+  carryForwardEnabled?: boolean;
+}
+
+export interface NewEnrolleeAssessment {
+  name: string;
+  amountKobo: number;
+  feePortionKobo: number;
+  futureCreditKobo: number;
+  creditYear: number;
 }
 
 export interface AuditEvent {
@@ -195,8 +244,10 @@ export interface SubscriberApplication {
 export interface JoinConfig {
   timezone: string;
   acceptingApplications: boolean;
+  enrollmentMode?: 'regular' | 'late' | null;
   period: EnrollmentPeriod | null;
   plans: PlanOffering[];
+  newEnrolleeAssessment?: NewEnrolleeAssessment | null;
 }
 
 export interface JoinWorkspace {
@@ -222,6 +273,11 @@ export interface AdminSubscriberApplication extends SubscriberApplication {
   planName: string;
   accountEmail: string;
   candidates: DuplicateCandidate[];
+  premiumKobo?: number | null;
+  nhisFeeBasisPoints?: number;
+  coverageStartsOn?: string;
+  /** Set when approval now would make this a late enrollment. */
+  lateCoverageStartsOn?: string | null;
 }
 
 export interface PortalActivityDay {

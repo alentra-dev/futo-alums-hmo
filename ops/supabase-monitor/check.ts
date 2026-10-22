@@ -43,8 +43,10 @@ function joinConfigValid(value: unknown): boolean {
   if (!config.acceptingApplications) return config.period === null && config.plans.length === 0;
   if (!config.period || typeof config.period !== 'object') return false;
   const period = config.period as Record<string, unknown>;
+  // After the renewal window, a closed period keeps accepting late enrollees (migration 202610220023).
+  const statusValid = period.status === 'open' || (period.status === 'closed' && config.enrollmentMode === 'late');
   return typeof period.id === 'string' && period.id.length > 0 && Number.isInteger(period.year)
-    && period.status === 'open' && typeof period.startsAt === 'string' && typeof period.endsAt === 'string';
+    && statusValid && typeof period.startsAt === 'string' && typeof period.endsAt === 'string';
 }
 
 function heartbeatUrl(value: string | undefined): URL | null {
