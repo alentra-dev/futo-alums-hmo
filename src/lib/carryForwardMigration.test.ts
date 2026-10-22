@@ -11,7 +11,7 @@ const CAC = 3300000;
 let db: PGlite;
 
 const households = {
-  paidAll: 11, unpaidCac: 12, overpaid: 13, underpaidPartial: 14, late: 15, unassigned: 16, draft: 17, imported: 18,
+  paidAll: 11, unpaidCac: 12, overpaid: 13, underpaidPartial: 14, late: 15, unassigned: 16, draft: 17, imported: 18, netted: 19,
 } as const;
 type Household = keyof typeof households;
 const enrollment = (household: Household, year = 2026) => id(households[household] * 10 + (year - 2020));
@@ -36,11 +36,11 @@ beforeAll(async () => {
     `('${enrollment(household)}','${id(households[household])}',${period},${plan},'family','${status}',26408300,${coverage})`;
   await db.exec(`
     insert into public.enrollments(id,household_id,period_id,plan_offering_id,category,status,premium_kobo,avon_coverage_start) values
-      ${values([add('paidAll'), add('unpaidCac'), add('overpaid'), add('underpaidPartial'), add('late', 'submitted', `'2026-10-01'`), add('unassigned'), add('draft', 'draft')])};
+      ${values([add('paidAll'), add('unpaidCac'), add('overpaid'), add('underpaidPartial'), add('late', 'submitted', `'2026-10-01'`), add('unassigned'), add('draft', 'draft'), add('netted')])};
     -- Earlier enrollees keep the original ₦33,000 = ₦15,000 fee + ₦18,000 credit terms.
     insert into public.enrollment_assessments(assessment_id,enrollment_id,program_id,amount_kobo,fee_portion_kobo,future_credit_kobo,credit_year)
       select '${id(500)}',e,program_id,${CAC},1500000,1800000,2027 from public.financial_assessments,
-      unnest(array['${enrollment('paidAll')}','${enrollment('unpaidCac')}','${enrollment('overpaid')}','${enrollment('underpaidPartial')}','${enrollment('draft')}']::uuid[]) e;
+      unnest(array['${enrollment('paidAll')}','${enrollment('unpaidCac')}','${enrollment('overpaid')}','${enrollment('underpaidPartial')}','${enrollment('draft')}','${enrollment('netted')}']::uuid[]) e;
     insert into public.enrollment_assessments(assessment_id,enrollment_id,program_id) select '${id(500)}','${enrollment('late')}',program_id from public.financial_assessments;
     insert into public.payments(enrollment_id,amount_kobo,paid_at,reference,status,assessment_id) values
       ('${enrollment('paidAll')}',${TOTAL},'2026-08-01','HMO','verified',null),
@@ -53,6 +53,9 @@ beforeAll(async () => {
       ('${enrollment('underpaidPartial')}',2000000,'2026-08-02','CAC','pending','${id(500)}'),
       ('${enrollment('late')}',${TOTAL + 1500000},'2026-10-10','HMO','verified',null),
       ('${enrollment('unassigned')}',${TOTAL},'2026-08-01','HMO','verified',null),
+      -- Asked to pay ₦33,000 less a ₦2,388.96 premium overpayment; paid ₦30,615.
+      ('${enrollment('netted')}',${TOTAL + 238896},'2026-08-01','HMO','verified',null),
+      ('${enrollment('netted')}',3061500,'2026-09-15','CAC','verified','${id(500)}'),
       ('${enrollment('draft')}',100000,'2026-08-01','HMO','rejected',null);
     -- An imported 2025 record with a variance must never reach 2026.
     insert into public.enrollments(id,household_id,period_id,category,status,premium_kobo)
@@ -100,6 +103,12 @@ describe('next-year carry-forward', () => {
     expect((await carryIns()).carry('late')).toMatchObject({ premiumBalanceKobo: 0, assessmentBalanceKobo: 0, overpaymentAppliedKobo: 1500000, prorationCreditKobo: 2222699, netKobo: 2222699 });
   });
 
+  it('reconciles an overpayment against the full contribution without double counting', async () => {
+    // ₦130,615 paid less ₦112,611.04 used (premium total + ₦15,000 fee) = ₦18,003.96, shown as
+    // the ₦18,000 credit plus ₦3.96 overpaid rather than a reduced credit plus an overpayment.
+    expect((await carryIns()).carry('netted')).toMatchObject({ premiumBalanceKobo: 396, assessmentBalanceKobo: 1800000, overpaymentAppliedKobo: 238500, netKobo: 1800396 });
+  });
+
   it('charges the default one-time fee to a submitted enrollee never assigned the assessment', async () => {
     expect((await carryIns()).carry('unassigned')).toMatchObject({ premiumBalanceKobo: 0, assessmentBalanceKobo: -1500000, netKobo: -1500000 });
   });
@@ -108,7 +117,7 @@ describe('next-year carry-forward', () => {
     const { carry, count } = await carryIns();
     expect(carry('draft')).toBeNull();
     expect(carry('imported')).toMatchObject({ premiumBalanceKobo: -TOTAL });
-    expect(count).toBe(7);
+    expect(count).toBe(8);
     await db.exec(`update public.enrollment_periods set carry_forward_enabled=false where coverage_year=2026`);
     expect((await carryIns()).count).toBe(0);
     const imported2026 = await db.query<{ c: unknown }>(`select public.enrollment_carry_in('${enrollment('imported')}') as c`);

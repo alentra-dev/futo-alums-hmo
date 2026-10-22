@@ -93,7 +93,7 @@ The **Carry to {next year}** column shows what each submitted enrollment will br
   - A partial payment carries the difference.
   - An enrollee who was never assigned the CAC owes the ₦15,000 fee.
 - **Late-enrollment credit**: the months AVON did not bill.
-- An HMO overpayment that covers the CAC (one combined transfer) counts as settling it.
+- An HMO overpayment counts toward the member's full CAC contribution first, whether it came from one combined transfer or from a CAC paid net of the overpayment. A member who paid ₦33,000 less their overpayment therefore shows the full ₦18,000 credit, and the overpayment is never counted twice.
 
 Figures use verified payments only and update immediately when you verify a late payment. Subscribers see the same breakdown under **Your {next year} enrollment**. Next year, it appears on their payable as **Brought forward**. Do not add a separate charge or credit for these amounts. When configuring next year's CAC assessment, do not assign it to returning households; their fee is already carried forward.
 

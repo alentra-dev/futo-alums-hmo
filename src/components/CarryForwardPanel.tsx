@@ -4,12 +4,14 @@ import type { CarryForward, FinancialAssessment } from '../lib/types';
 
 /** The lines that make up a carry-forward, shared by the next-year and brought-forward views. */
 export function CarryForwardLines({ carry, assessmentName = 'CAC registration contribution' }: { carry: CarryForward; assessmentName?: string }) {
+  // The overpayment counted toward the contribution is shown once, inside the CAC line.
+  const applied = carry.overpaymentAppliedKobo > 0 ? <small>includes {formatNaira(carry.overpaymentAppliedKobo)} of your HMO overpayment</small> : null;
   return <>
     {carry.prorationCreditKobo > 0 && <div><dt>Late-enrollment credit (months AVON did not bill)</dt><dd>{formatSignedNaira(carry.prorationCreditKobo)}</dd></div>}
-    {carry.premiumBalanceKobo > 0 && <div><dt>HMO premium overpayment</dt><dd>{formatSignedNaira(carry.premiumBalanceKobo)}</dd></div>}
+    {carry.premiumBalanceKobo > 0 && <div><dt>{carry.overpaymentAppliedKobo > 0 ? 'Remaining HMO premium overpayment' : 'HMO premium overpayment'}</dt><dd>{formatSignedNaira(carry.premiumBalanceKobo)}</dd></div>}
     {carry.premiumBalanceKobo < 0 && <div><dt>HMO premium still unpaid</dt><dd>{formatSignedNaira(carry.premiumBalanceKobo)}</dd></div>}
-    {carry.assessmentBalanceKobo > 0 && <div><dt>{assessmentName} credit</dt><dd>{formatSignedNaira(carry.assessmentBalanceKobo)}</dd></div>}
-    {carry.assessmentBalanceKobo < 0 && <div><dt>One-time CAC registration fee</dt><dd>{formatSignedNaira(carry.assessmentBalanceKobo)}</dd></div>}
+    {carry.assessmentBalanceKobo > 0 && <div><dt>{assessmentName} credit{applied}</dt><dd>{formatSignedNaira(carry.assessmentBalanceKobo)}</dd></div>}
+    {carry.assessmentBalanceKobo < 0 && <div><dt>One-time CAC registration fee{applied}</dt><dd>{formatSignedNaira(carry.assessmentBalanceKobo)}</dd></div>}
     {carry.overpaymentAppliedKobo > 0 && carry.assessmentBalanceKobo === 0 && <div><dt>{assessmentName} (paid with your HMO transfer)</dt><dd>Settled</dd></div>}
   </>;
 }

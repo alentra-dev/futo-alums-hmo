@@ -68,7 +68,8 @@ export function enrollmentFinancialPosition(
  *   only the one-time fee. A submitted enrollee never assigned the assessment owes the
  *   current one-time fee (`registrationFeeKobo`).
  * - Proration credit: the stored late-enrollment credit.
- * An HMO overpayment first covers an assessment balance owed. Only submitted or closed
+ * An HMO overpayment first covers what remains of the full assessment contribution (migration
+ * 202610220025). Only submitted or closed
  * enrollments in a carry-forward year carry anything.
  */
 export function nextEnrollmentCarryForward(
@@ -85,7 +86,12 @@ export function nextEnrollmentCarryForward(
   let assessmentBalanceKobo = assessment
     ? financial.assessmentPaidKobo - assessment.feePortionKobo - financial.adjustmentKobo
     : 0 - registrationFeeKobo;
-  const overpaymentAppliedKobo = premiumBalanceKobo > 0 && assessmentBalanceKobo < 0 ? Math.min(premiumBalanceKobo, -assessmentBalanceKobo) : 0;
+  // An HMO overpayment is reconciled against what remains of the full contribution the
+  // member was asked to pay, so a contribution paid net of an overpayment earns its credit.
+  const assessmentUnpaidKobo = assessment
+    ? Math.max(0, assessment.amountKobo + financial.adjustmentKobo - financial.assessmentPaidKobo)
+    : registrationFeeKobo;
+  const overpaymentAppliedKobo = premiumBalanceKobo > 0 ? Math.min(premiumBalanceKobo, assessmentUnpaidKobo) : 0;
   premiumBalanceKobo -= overpaymentAppliedKobo;
   assessmentBalanceKobo += overpaymentAppliedKobo;
   const prorationCreditKobo = enrollment.proration?.creditKobo ?? 0;

@@ -101,6 +101,11 @@ describe('next-enrollment carry-forward (same cases as carryForwardMigration.tes
     expect(enrollmentFinancialPosition(late, payments, { ...assessment }, terms(nairaToKobo(15_000), 0)).assessmentOwnDueKobo).toBe(0);
   });
 
+  it('reconciles an overpayment against the full contribution without double counting', () => {
+    expect(carry(member(), [pay(TOTAL + 238_896), pay(3_061_500, assessment.id)], higher))
+      .toMatchObject({ premiumBalanceKobo: 396, assessmentBalanceKobo: 1_800_000, overpaymentAppliedKobo: 238_500, netKobo: 1_800_396 });
+  });
+
   it('charges the default one-time fee to a submitted enrollee never assigned the assessment', () => {
     expect(carry(member(), [pay(TOTAL)])).toMatchObject({ premiumBalanceKobo: 0, assessmentBalanceKobo: -1_500_000, netKobo: -1_500_000 });
   });

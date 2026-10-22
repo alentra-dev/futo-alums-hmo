@@ -211,7 +211,10 @@ Migration `202610220024` carries each **submitted or closed** enrollment's balan
   - A partly paid one carries the difference either way.
   - A submitted enrollee never assigned the assessment owes the active assessment's default one-time fee.
 - **Proration credit** = the stored late-enrollment credit.
-- An HMO overpayment first covers an assessment balance owed (`overpaymentAppliedKobo`). This is how the late member's single combined transfer settles both obligations.
+- An HMO overpayment is first reconciled against what remains of the member's **full** assessment contribution (amount + adjustment − verified assessment payments), recorded as `overpaymentAppliedKobo`. Migration `202610220025` corrected this from "the one-time fee only".
+  - Members were told to pay their contribution net of a premium overpayment. A member who paid ₦33,000 less a ₦2,388.96 overpayment is shown the full ₦18,000 CAC credit plus the ₦3.96 actually overpaid, not a ₦15,615 credit plus a separate ₦2,388.96 overpayment.
+  - The net is identical either way, so nothing is double counted: net = total verified payments + carry-in − subscriber total − one-time fee − adjustment + proration credit.
+  - This is also how the late member's single combined transfer settles both obligations.
 - **Net** = the sum of the three, applied as one figure.
 
 Design properties:
@@ -330,6 +333,7 @@ Major stages:
 - `202609160021`: dropped the duplicate assessment bank columns, leaving `reference_prefix`, and rebuilt `get_financial_workspace` and `upsert_financial_assessment` around the single program account. Guarded against divergent stored accounts.
 - `202610100022`: snapshots individual assessment contribution, fee, credit, and year; adds validated admin-only individual-term mutation and period-scoped workspace fields. Deployed to production 2026-10-10.
 
+- `202610220025`: `enrollment_carry_forward` reconciles an HMO overpayment against the full remaining assessment contribution, not only the one-time fee. This changes the premium/assessment split only; net carry-forwards are unchanged.
 - `202610220024`: automatic next-year carry-forward: `carry_forward_enabled` on periods (false before 2026), the internal `enrollment_carry_forward` and `enrollment_carry_in` functions, and the side-car read `get_enrollment_carry_forwards`. Wrapped in `BEGIN`/`COMMIT`. Deployed to production 2026-10-22 with `202610220023`.
 - `202610220023`: continuous late enrollment. It adds `coverage_starts_on` and `late_enrollment_open` to periods, and coverage-start and stored-proration columns to enrollments, with the `apply_enrollment_proration` trigger. It also adds:
   - the internal helpers `application_intake`, `late_coverage_start`, and `period_after_renewal_window`;
@@ -512,6 +516,12 @@ Migration `202609160021` completes the single-account cleanup: the duplicate `be
 The migration aborts if any stored assessment account still differs from the program payment account, because the drop cannot be undone.
 
 ## 17. Change log for this handoff
+
+### 2026-10-22 (carry-forward overpayment allocation)
+
+The user confirmed that one earlier member was asked to pay the ₦33,000 CAC less their ₦2,388.96 premium overpayment, and paid ₦30,615. That member's 2027 carry-forward was correct in total (+₦18,003.96) and not double counted: ₦130,615 was paid against ₦112,611.04 consumed. It was split misleadingly, however, as a ₦15,615 CAC credit plus a ₦2,388.96 overpayment, because the overpayment was reconciled only against the one-time fee.
+
+Migration `202610220025` and the TypeScript mirror now reconcile the overpayment against the full remaining contribution. That member is shown a +₦18,000.00 CAC credit (including ₦2,385.00 of their overpayment) and +₦3.96 overpaid. The subscriber and admin breakdowns name the overpayment inside the CAC line. A matching synthetic case was added to both the PostgreSQL and TypeScript suites. No other production member's split or net changes.
 
 ### 2026-10-22 (automatic next-year carry-forward)
 
