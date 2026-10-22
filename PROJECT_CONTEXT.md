@@ -528,7 +528,7 @@ The migration aborts if any stored assessment account still differs from the pro
 
 ### 2026-10-22 (AVON export without premium columns)
 
-At the user's request, `AVON PREMIUM`, `AVON (+ NHIS FEE)`, and `AVON BALANCE` were moved into the internal export columns (`src/lib/export.ts`), so the AVON workbook now ends at `CLIENT NAME` and carries no financial columns. The admin full export keeps all three, with unchanged values and currency formatting. A regression test asserts the AVON header set, its last columns, and that no data row extends past `CLIENT NAME`. This is frontend only; there is no migration.
+At the user's request, `AVON PREMIUM`, `AVON (+ NHIS FEE)`, and `AVON BALANCE` were moved into the internal export columns (`src/lib/export.ts`), so the AVON workbook now ends at `CLIENT NAME` and carries no financial columns. The admin full export keeps all three, with unchanged values and currency formatting. A regression test asserts the AVON header set, its last columns, and that no data row extends past `CLIENT NAME`. This is frontend only; there is no migration. `npm run check` passed (159 tests), and `npm run test:e2e` passed all 26 scenarios. Commit `ba8d5a7` was deployed by GitHub Pages run `39816409925`, which was dispatched manually because the push did not trigger a run. The live export bundle was confirmed to list the three columns as internal.
 
 ### 2026-10-22 (carry-forward overpayment allocation)
 
