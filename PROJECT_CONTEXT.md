@@ -523,6 +523,14 @@ The user confirmed that one earlier member was asked to pay the ₦33,000 CAC le
 
 Migration `202610220025` and the TypeScript mirror now reconcile the overpayment against the full remaining contribution. That member is shown a +₦18,000.00 CAC credit (including ₦2,385.00 of their overpayment) and +₦3.96 overpaid. The subscriber and admin breakdowns name the overpayment inside the CAC line. A matching synthetic case was added to both the PostgreSQL and TypeScript suites. No other production member's split or net changes.
 
+Validation: `npm run check` passed (159 tests in 21 files), and `npm run test:e2e` passed all 26 scenarios. Deployed 2026-10-22:
+
+- commit `5e1ab84`;
+- Supabase run `39807511148`, whose preview listed only `202610220025`, which then applied;
+- GitHub Pages run `39807512784`.
+
+The ignored `.private/verify-carry-forward.ts` compared every 2026 carry-forward before and after. All seven nets were identical. Only the affected member's split changed, to +₦3.96 premium and +₦18,000.00 CAC with ₦2,385.00 of the overpayment applied; the other six were unchanged. Before/after records are in ignored `.private/carry-forward-*-025.json`.
+
 ### 2026-10-22 (automatic next-year carry-forward)
 
 The user asked for next-year credits to be applied automatically, both proration credits and the credits of members who paid the higher CAC, with exact premium over- and underpayments factored in. Subscribers are now told that an unpaid CAC becomes a ₦15,000 charge next year, and members who paid see their accurate credit.
