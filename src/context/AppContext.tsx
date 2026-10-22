@@ -5,6 +5,7 @@ import { authCallbackError, buildFreshAuthUrl, buildMagicLinkRedirect, hasAuthCa
 import { fullName } from '../lib/format';
 import { planTotalKobo, type SurchargeRates } from '../lib/money';
 import { isDemoMode, supabase } from '../lib/supabase';
+import { recordPortalSignIn } from '../lib/portalActivity';
 import { loadSurchargeRates, surchargeRates, withSurchargeRates } from '../lib/surchargeRates';
 import { avonProration, coverageTermStart } from '../lib/proration';
 import type { AssessmentAdjustment, CarryForward, ConsentRecord, Enrollment, EnrollmentPeriod, EnrollmentProration, FinancialAssessment, Payment, PaymentAccount, PaymentInput, PaymentStatus, PlanCategory, ProgramSnapshot, Role } from '../lib/types';
@@ -185,15 +186,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setLoading(false);
         return;
       }
-      // The database collapses repeated portal loads into one account activity record per local day.
-      void supabase?.rpc('record_portal_sign_in');
       if (authCallbackPending.current) {
         authCallbackPending.current = false;
         window.location.replace(buildFreshAuthUrl(initialUrl.current));
         return;
       }
-      // Supabase advises keeping async work outside the auth-state callback.
-      loadTimer = setTimeout(() => void loadLiveSnapshot(), 0);
+      // Supabase advises keeping async work outside the auth-state callback. The database
+      // collapses repeated portal loads into one account activity record per local day.
+      loadTimer = setTimeout(() => {
+        if (supabase) void recordPortalSignIn(supabase);
+        void loadLiveSnapshot();
+      }, 0);
     };
 
     supabase.auth.getSession().then(({ data }) => {
