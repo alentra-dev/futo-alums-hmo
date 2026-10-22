@@ -319,7 +319,7 @@ Audit requirements:
 - label service/import/reconciliation changes as system actions when no user actor exists;
 - render timestamps in the program-configured time zone.
 
-Daily unique sign-in activity uses the configured program time zone for day boundaries. The admin activity view distinguishes subscriber-linked accounts from admin/owner-only accounts.
+Daily unique sign-in activity uses the configured program time zone for day boundaries. The frontend records it through `recordPortalSignIn` (`src/lib/portalActivity.ts`) once a session exists. Supabase query builders are lazy, so an RPC that is not awaited (`void supabase.rpc(...)`) sends nothing; always await or `.then()` them. Activity from 2026-08-26 to 2026-10-22 was never recorded for this reason, and was partly reconstructed (see the change log). The admin activity view distinguishes subscriber-linked accounts from admin/owner-only accounts.
 
 ## 11. Database migration history
 
@@ -392,7 +392,7 @@ Demo-mode fixtures in `src/data/demo.ts` derive the preview period from the curr
 
 Current baseline as of this document update:
 
-- 21 Vitest files, 157 unit/database/monitor tests passing, including embedded PostgreSQL migration, authorization, and workerd runtime tests. `src/test/migrationDatabase.ts` replays **every** migration into PGlite with synthetic auth/storage stubs, patching only the 2025 Vital data assertion in `202608250012`. It is used by `lateEnrollmentMigration.test.ts` and `carryForwardMigration.test.ts`.
+- 22 Vitest files, 162 unit/database/monitor tests passing, including embedded PostgreSQL migration, authorization, and workerd runtime tests. `src/test/migrationDatabase.ts` replays **every** migration into PGlite with synthetic auth/storage stubs, patching only the 2025 Vital data assertion in `202608250012`. It is used by `lateEnrollmentMigration.test.ts` and `carryForwardMigration.test.ts`.
 - 26 Playwright scenarios passing: thirteen workflows at desktop and mobile sizes;
 - production build passing;
 - Vite reports large chunks for the chart/core/Excel bundles; this is a performance warning, not a failed build.
@@ -525,6 +525,18 @@ Migration `202609160021` completes the single-account cleanup: the duplicate `be
 The migration aborts if any stored assessment account still differs from the program payment account, because the drop cannot be undone.
 
 ## 17. Change log for this handoff
+
+### 2026-10-22 (portal activity was never recorded)
+
+The admin **Portal activity** page showed zero activity, although the late member used the portal on 2026-10-10. Read-only checks found:
+
+- `portal_sign_in_days` was completely empty, while Supabase Auth showed 10 accounts signing in after the feature shipped with migration `202608260013` on 2026-08-26.
+- Called as an authenticated user in the PGlite replay, the database function worked.
+- The cause was the client: `void supabase?.rpc('record_portal_sign_in')` never sent the request, because PostgREST builders execute only when awaited.
+
+Fix: `recordPortalSignIn` awaits the request and logs, rather than throws, any failure. It is now called after the auth-state callback rather than inside it. A regression test uses a lazy fake builder and fails if the request is never sent. `npm run check` passed (162 tests in 22 files), and `npm run test:e2e` passed all 26 scenarios. Commit `acbafd0` was deployed by GitHub Pages run `39821098122`, dispatched manually because push-triggered runs were lagging. The live bundle was confirmed to contain the fix.
+
+History cannot be fully recovered. The ignored `.private/backfill-portal-activity.ts` (preview, then `--apply`; additive and missing days only) reconstructed 19 account-days for 11 accounts between 2026-08-26 and 2026-10-10. Its only evidence was each account's Supabase Auth last sign-in and the days it made audited changes. Visits that left no change and were not an account's last sign-in remain unknown. The inserted keys are kept in ignored `.private/portal-activity-backfill.json`, so the reconstruction can be identified or reversed. Recording from a real visit after deployment still needs to be observed in production.
 
 ### 2026-10-22 (AVON export without premium columns)
 
